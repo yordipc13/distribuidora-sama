@@ -34,6 +34,7 @@ const translations = {
 		quoteMessage: "Hola SAMA, deseo cotizar: ", noAccount: "La cuenta estará disponible próximamente.",
 		accountTitle: "Tu cuenta SAMA", signIn: "Iniciar sesión", signUp: "Crear cuenta", signOut: "Cerrar sesión",
 		email: "Correo electrónico", password: "Contraseña", switchToSignUp: "¿No tienes cuenta? Crear cuenta", switchToSignIn: "¿Ya tienes cuenta? Inicia sesión",
+		googleSignIn: "Continuar con Google", orEmail: "o continúa con correo",
 		authError: "No se pudo completar el acceso: {message}", authWorking: "Procesando…", signUpConfirmation: "Revisa tu correo para confirmar la cuenta.", favoritesSyncError: "No se pudieron sincronizar tus favoritos. Verifica la configuración de la cuenta.",
 		switchToDark: "Activar modo oscuro", switchToLight: "Activar modo claro", language: "Idioma", switchToEnglish: "Cambiar a inglés", switchToSpanish: "Cambiar a español",
 		countProducts: "{count} productos", countOne: "1 producto",
@@ -73,6 +74,7 @@ const translations = {
 		quoteMessage: "Hello SAMA, I would like a quote for: ", noAccount: "Accounts will be available soon.",
 		accountTitle: "Your SAMA account", signIn: "Sign in", signUp: "Create account", signOut: "Sign out",
 		email: "Email", password: "Password", switchToSignUp: "New here? Create an account", switchToSignIn: "Already have an account? Sign in",
+		googleSignIn: "Continue with Google", orEmail: "or continue with email",
 		authError: "Could not complete sign-in: {message}", authWorking: "Working…", signUpConfirmation: "Check your email to confirm your account.", favoritesSyncError: "Could not sync your favorites. Check the account setup.",
 		switchToDark: "Switch to dark mode", switchToLight: "Switch to light mode", language: "Language", switchToEnglish: "Switch to English", switchToSpanish: "Switch to Spanish",
 		countProducts: "{count} products", countOne: "1 product",
@@ -85,13 +87,6 @@ let manualTheme = false;
 const products = [];
 const PRODUCTS_TABLE = "products";
 const categoryIcons = ["▦", "✦", "⌁", "▤"];
-const defaultHeroCategories = [
-	{ name: "Limpieza", tone: "cleaning", icon: "✧" },
-	{ name: "Oficina", tone: "office", icon: "▤" },
-	{ name: "Farmacia", tone: "pharmacy", icon: "+" },
-	{ name: "Electrodomésticos y Tecnología", tone: "technology", icon: "⌘" },
-	{ name: "Covid-19", tone: "health", icon: "◉" },
-];
 const categoryToneByName = {
 	"limpieza": "cleaning",
 	"cleaning": "cleaning",
@@ -105,7 +100,7 @@ const categoryToneByName = {
 	"covid-19": "health",
 	"health": "health",
 };
-let heroCategories = defaultHeroCategories;
+let heroCategories = [];
 let activeHeroSlide = 0;
 let heroAutoplayTimer = null;
 const heroAutoplayDelay = 6000;
@@ -117,7 +112,6 @@ let currentUser = null;
 let authMode = "signin";
 let authMessage = "";
 let categories = [];
-let categoryRows = [];
 
 const state = {
 	query: "",
@@ -180,14 +174,14 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, character 
 
 function normalizeProduct(row) {
 	const stock = row.stock == null ? null : Number(row.stock);
-	const category = row.category?.name ?? row.categories?.name ?? row.categoria ?? (typeof row.category === "string" ? row.category : "Sin categoría");
+	const category = row.category?.name ?? row.categories?.name ?? row.categoria ?? row.Categoria ?? (typeof row.category === "string" ? row.category : "Sin categoría");
 	return {
-		sku: String(row.sku ?? row.SKU ?? row.codigo ?? "").trim(),
-		name: String(row.producto ?? row.product ?? row.nombre ?? row.name ?? "").trim(),
+		sku: String(row.sku ?? row.Sku ?? row.SKU ?? row.codigo ?? "").trim(),
+		name: String(row.producto ?? row.Producto ?? row.product ?? row.nombre ?? row.name ?? "").trim(),
 		category: String(category).trim(),
-		subcategory: String(row.subcategoria ?? row.subcategory ?? "").trim(),
-		description: String(row.descripcion ?? row.description ?? row.detalle ?? "").trim(),
-		image: String(row.imagen ?? row.image ?? row.imagen_url ?? row.image_url ?? "").trim(),
+		subcategory: String(row.subcategoria ?? row.Subcategoria ?? row.subcategory ?? "").trim(),
+		description: String(row.descripcion ?? row.Descripcion ?? row.description ?? row.detalle ?? "").trim(),
+		image: String(row.imagen ?? row.image ?? row["Image(url)"] ?? row.imagen_url ?? row.image_url ?? "").trim(),
 		stock,
 		isFeatured: row.is_featured === true,
 	};
@@ -195,16 +189,15 @@ function normalizeProduct(row) {
 
 function rebuildCategories() {
 	const names = [...new Set([
-		...categoryRows.map(category => String(category.name ?? "").trim()),
 		...products.flatMap(product => product.category.split(",").map(category => category.trim())),
 	].filter(Boolean))];
 	categories = names.map((name, index) => ({
 		name,
 		icon: categoryIcons[index % categoryIcons.length],
 		count: products.filter(product => product.category.split(",").some(category => category.trim() === name)).length,
-		tone: categoryToneByName[name.toLocaleLowerCase("es")] || defaultHeroCategories[index % defaultHeroCategories.length].tone,
+		tone: categoryToneByName[name.toLocaleLowerCase("es")] || `category-${index % 4}`,
 	}));
-	heroCategories = categories.length ? categories : defaultHeroCategories;
+	heroCategories = categories;
 }
 
 async function loadProducts() {
@@ -215,19 +208,14 @@ async function loadProducts() {
 		render();
 		return;
 	}
-	const [productResult, categoryResult] = await Promise.all([
-		client
-			.from(PRODUCTS_TABLE)
-			.select("sku,name,category:categories(name),subcategory,description,image_url,stock,is_featured")
-			.eq("is_active", true),
-		client.from("categories").select("name").eq("is_active", true).order("name"),
-	]);
-	const { data, error } = productResult;
+	const { data, error } = await client
+		.from(PRODUCTS_TABLE)
+		.select("*")
+		.eq("is_active", true);
 	if (error) {
 		state.loadError = t("loadError", { message: error.message });
 	} else {
-		categoryRows = categoryResult.error ? [] : categoryResult.data || [];
-		products.splice(0, products.length, ...(data || []).map(normalizeProduct).filter(product => product.sku && product.name && product.stock !== 0));
+		products.splice(0, products.length, ...(data || []).map(normalizeProduct).filter(product => product.sku && product.name));
 		rebuildCategories();
 	}
 	state.loading = false;
@@ -267,7 +255,7 @@ function showAccount() {
 	const modal = document.querySelector("#modal");
 	const accountContent = currentUser
 		? `<div class="account-content"><p>${escapeHtml(currentUser.email || "")}</p><p class="account-status" role="status">${escapeHtml(authMessage)}</p><button class="primary-button" type="button" data-sign-out>${t("signOut")}</button></div>`
-		: `<form class="auth-form" id="account-form"><label>${t("email")}<input name="email" type="email" autocomplete="email" required></label><label>${t("password")}<input name="password" type="password" autocomplete="${authMode === "signup" ? "new-password" : "current-password"}" minlength="6" required></label><p class="account-status" role="status" aria-live="polite">${escapeHtml(authMessage)}</p><button class="primary-button" type="submit">${t(authMode === "signup" ? "signUp" : "signIn")}</button><button class="text-link" type="button" data-auth-mode>${t(authMode === "signup" ? "switchToSignIn" : "switchToSignUp")}</button></form>`;
+		: `<form class="auth-form" id="account-form"><button class="google-auth-button" type="button" data-google-sign-in><span aria-hidden="true">G</span>${t("googleSignIn")}</button><p class="auth-divider">${t("orEmail")}</p><label>${t("email")}<input name="email" type="email" autocomplete="email" required></label><label>${t("password")}<input name="password" type="password" autocomplete="${authMode === "signup" ? "new-password" : "current-password"}" minlength="6" required></label><p class="account-status" role="status" aria-live="polite">${escapeHtml(authMessage)}</p><button class="primary-button" type="submit">${t(authMode === "signup" ? "signUp" : "signIn")}</button><button class="text-link" type="button" data-auth-mode>${t(authMode === "signup" ? "switchToSignIn" : "switchToSignUp")}</button></form>`;
 	modal.innerHTML = `<section class="modal quote-modal account-modal"><button class="modal-close" type="button" data-close aria-label="${t("close")}">×</button><header class="quote-header"><span class="eyebrow">SAMA</span><h2>${t("accountTitle")}</h2>${currentUser ? "" : `<p>${t("favoritesIntro")}</p>`}</header>${accountContent}</section>`;
 	modal.classList.add("open");
 	modal.querySelector("[data-close]").addEventListener("click", () => modal.classList.remove("open"));
@@ -277,11 +265,27 @@ function showAccount() {
 		authMessage = "";
 		showAccount();
 	});
+	modal.querySelector("[data-google-sign-in]")?.addEventListener("click", async () => {
+		const auth = window.supabaseClient?.auth;
+		if (!auth) {
+			authMessage = t("noConnection");
+			showAccount();
+			return;
+		}
+		const redirectTo = `${window.location.origin}${window.location.pathname}`;
+		const { error } = await auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+		if (error) {
+			authMessage = t("authError", { message: error.message });
+			showAccount();
+		}
+	});
 	modal.querySelector("[data-sign-out]")?.addEventListener("click", async () => {
 		const { error } = await window.supabaseClient.auth.signOut();
 		if (error) {
 			authMessage = t("authError", { message: error.message });
 			showAccount();
+		} else {
+			modal.classList.remove("open");
 		}
 	});
 	modal.querySelector("#account-form")?.addEventListener("submit", async event => {
