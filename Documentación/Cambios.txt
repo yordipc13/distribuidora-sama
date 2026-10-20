@@ -1,0 +1,18 @@
+2026-10-19 - Primera interfaz pública
+
+- Se construyó la interfaz pública responsive en index.html, index.css e index.js.
+- Se incorporó el brandbook SAMA: verde #15803d, verde claro #22c55e, negro azulado #0f172a y blanco #f8fafc.
+- Se usaron Logo y Banner/banner.jpg y Logo y Banner/Logo.jpg como assets de la experiencia pública.
+- Se tomó wladhe.com únicamente como referencia funcional; la distribución, estilos y jerarquía visual son propios.
+- El catálogo actual utiliza datos demostrativos para validar la navegación. Queda pendiente conectar productos reales de Supabase.
+- Se implementaron búsqueda, filtro por categoría, detalle en modal, cantidades, favoritos, cotización persistente en localStorage y enlace de solicitud por WhatsApp.
+- El flujo Excel y la página Admin permanecen fuera de alcance hasta nueva autorización.
+- Las tarjetas dejaron de usar productos demostrativos: ahora se generan únicamente con los registros de la tabla `products` de Supabase.
+- `normalizeProduct` acepta los nombres documentados del Excel (`sku`, `producto`, `categoria`, `subcategoria`, `stock`, `detalle`, `descripcion`, `imagen`) y variantes comunes.
+- Los productos sin SKU, nombre o stock disponible se excluyen del catálogo; las imágenes faltantes o rotas usan el logo como respaldo.
+- La administración heredada se sustituyó por una vista SAMA de solo lectura para productos, categorías y marcas activas.
+- El panel usa la URL y clave publicable del proyecto Supabase SAMA; no incluye permisos de escritura ni lógica de envíos.
+- Se retiraron los scripts y migraciones de envíos ajenos al catálogo SAMA.
+- Se agregó `Admin/js/product-description.js`, que prepara productos antes de un futuro `insert/upsert`: conserva cualquier descripción manual y solo solicita descripciones para celdas vacías, con un retardo predeterminado de 3.5 segundos entre solicitudes.
+- Se agregó `cloudflare-worker/src/index.js` para consumir `gemini-1.5-flash` sin exponer secretos al navegador. En Cloudflare Workers debe crearse el secret `GEMINI_API_KEY`; en `Admin/admin.html` solo debe configurarse la URL pública del Worker en `SAMA_DESCRIPTION_WORKER_URL`.
+- El módulo expone `window.SamaProductDescriptions.prepareProductsForSync(rows, { onProgress })`; su resultado es el que debe enviarse a Supabase al implementar la importación del Excel Maestro.

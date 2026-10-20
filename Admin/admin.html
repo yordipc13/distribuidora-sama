@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f8f7" />
+    <script>
+      document.documentElement.lang = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
+      document.documentElement.dataset.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    </script>
+    <title>Administración de catálogo | SAMA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="sama-admin.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0" defer></script>
+    <script src="js/supabase.js" defer></script>
+    <script>
+      // Solo es la URL pública del Worker. La GEMINI_API_KEY vive en Cloudflare.
+      window.SAMA_DESCRIPTION_WORKER_URL = "";
+    </script>
+    <script src="js/product-description.js" defer></script>
+    <script src="js/sama-admin.js" defer></script>
+  </head>
+  <body>
+    <div class="admin-shell">
+      <header class="topbar">
+        <a class="brand" href="../index.html" aria-label="SAMA, inicio">
+          <img src="../Logo y Banner/Logo.jpg" alt="" />
+          <span class="brand-name">SAMA <strong>Distribuidora</strong></span>
+        </a>
+        <div class="topbar-actions">
+          <span class="connection-status" id="connection-status" role="status">Conectando a Supabase...</span>
+          <select class="language-select" id="admin-language" aria-label="Idioma">
+            <option value="es">ES</option>
+            <option value="en">EN</option>
+          </select>
+          <button class="button theme-toggle" id="theme-toggle" type="button" title="Cambiar tema" aria-label="Cambiar tema">☾</button>
+          <button class="button" id="refresh-catalog" type="button" data-i18n="refresh">Actualizar</button>
+          <a class="back-link" href="../index.html" data-i18n="backToCatalog">Volver al catálogo <span aria-hidden="true">↗</span></a>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow" data-i18n="catalog">CATÁLOGO</p>
+            <h1 data-i18n="adminTitle">Administración SAMA</h1>
+            <p class="page-description" data-i18n="adminDescription">Consulta productos, categorías y marcas activas.</p>
+          </div>
+          <span class="read-only-label" data-i18n="readOnly">Solo lectura</span>
+        </section>
+
+        <section class="catalog-panel" aria-label="Catálogo de SAMA">
+          <div class="toolbar">
+            <label class="search-box" for="catalog-search">
+              <span class="search-icon" aria-hidden="true"></span>
+              <input id="catalog-search" type="search" placeholder="Buscar en el catálogo..." autocomplete="off" />
+            </label>
+            <label class="select-wrap" for="catalog-view">
+              <span class="sr-only" data-i18n="recordType">Tipo de registro</span>
+              <select id="catalog-view">
+                <option value="products" data-i18n="products">Productos</option>
+                <option value="categories" data-i18n="categories">Categorías</option>
+                <option value="brands" data-i18n="brands">Marcas</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="table-meta">
+            <span id="view-label">Productos</span>
+            <span id="result-count">0 registros</span>
+            <span class="filter-hint" id="filter-hint" data-i18n="filterHint">Pulsa un encabezado para añadir un filtro.</span>
+          </div>
+
+          <div class="table-viewport">
+            <table>
+              <thead id="catalog-head"></thead>
+              <tbody id="catalog-body"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state" hidden>
+              <strong id="empty-title">No hay registros</strong>
+              <span id="empty-message">Los registros activos aparecerán aquí.</span>
+            </div>
+          </div>
+
+          <div class="table-footer">
+            <span data-i18n="footerTitle">SAMA · Catálogo</span>
+            <span data-i18n="footerData">Datos activos de Supabase</span>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
