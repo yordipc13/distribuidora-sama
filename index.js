@@ -9,7 +9,7 @@ const translations = {
 		categoryFilter: "Filtrar por categoría",
 		heroBody: "Encuentra suministros confiables para oficina, limpieza y tecnología. Nosotros te ayudamos a encontrar la mejor solución.",
 		browse: "Explorar catálogo", shopCategory: "Compra por categoría", findQuickly: "Encuentra rápidamente lo que necesitas.", viewCatalog: "Ver catálogo →",
-		featured: "Productos destacados", addForQuote: "Agrega productos a tu lista para solicitar una cotización.", results: "resultados",
+		featured: "Productos destacados", catalogByCategory: "Explora el catálogo por categoría", seeCategory: "Ver categoría", addForQuote: "Agrega productos a tu lista para solicitar una cotización.", results: "resultados",
 		attention: "Atención personalizada", helpChoose: "Te ayudamos a elegir la mejor opción.", businessCatalog: "Catálogo empresarial",
 		bulkSolutions: "Soluciones para compras por volumen.", noCommitment: "Cotización sin compromiso", quoteWhatsapp: "Solicita precios a través de WhatsApp.",
 		links: "Enlaces", catalog: "Catálogo", categories: "Categorías", faq: "Preguntas frecuentes", contact: "Contáctanos",
@@ -25,7 +25,10 @@ const translations = {
 		close: "Cerrar", decreaseQuantity: "Disminuir cantidad", increaseQuantity: "Aumentar cantidad",
 		addedQuote: "{name} se agregó a tu cotización.", addedFavorite: "Agregado a favoritos.", removedFavorite: "Eliminado de favoritos.",
 		selection: "Tu selección", emptyFavorites: "Aún no tienes productos favoritos.", viewProduct: "Ver producto",
-		yourRequest: "Tu solicitud", quoteList: "Lista de cotización", emptyQuote: "Tu lista de cotización está vacía.", requestWhatsapp: "Solicitar por WhatsApp",
+		favoritesIntro: "Guarda aquí los productos que quieres volver a pedir.", favoriteSummary: "Resumen de favoritos", addFavoriteQuote: "Agregar a cotización", addAllFavorites: "Agregar todos a cotización", removeFavorite: "Quitar de favoritos", favoritesAddedToQuote: "Productos agregados a tu cotización.",
+		yourRequest: "Tu solicitud", quoteList: "Tu cotización", emptyQuote: "Aún no agregas productos a tu cotización.", requestWhatsapp: "Solicitar cotización por WhatsApp",
+		quoteInstructions: "Revisa los productos y cantidades antes de solicitar tus precios.", quoteSummary: "Resumen de cotización", distinctProducts: "Productos diferentes", requestedUnits: "Unidades solicitadas",
+		quotePriceNote: "Los precios se confirman al preparar tu cotización.", removeItem: "Quitar", continueShopping: "Seguir viendo productos", browseCatalog: "Explorar catálogo",
 		quoteMessage: "Hola SAMA, deseo cotizar: ", noAccount: "La cuenta estará disponible próximamente.",
 		switchToDark: "Activar modo oscuro", switchToLight: "Activar modo claro", language: "Idioma",
 		countProducts: "{count} productos", countOne: "1 producto",
@@ -40,7 +43,7 @@ const translations = {
 		categoryFilter: "Filter by category",
 		heroBody: "Find reliable office, cleaning, and technology supplies. We help you find the right solution.",
 		browse: "Browse catalog", shopCategory: "Shop by category", findQuickly: "Find what you need quickly.", viewCatalog: "View catalog →",
-		featured: "Featured products", addForQuote: "Add products to your list to request a quote.", results: "results",
+		featured: "Featured products", catalogByCategory: "Explore the catalog by category", seeCategory: "View category", addForQuote: "Add products to your list to request a quote.", results: "results",
 		attention: "Personalized service", helpChoose: "We help you choose the right option.", businessCatalog: "Business catalog",
 		bulkSolutions: "Solutions for volume purchases.", noCommitment: "No-obligation quote", quoteWhatsapp: "Request pricing on WhatsApp.",
 		links: "Links", catalog: "Catalog", categories: "Categories", faq: "Frequently asked questions", contact: "Contact us",
@@ -56,7 +59,10 @@ const translations = {
 		close: "Close", decreaseQuantity: "Decrease quantity", increaseQuantity: "Increase quantity",
 		addedQuote: "{name} was added to your quote.", addedFavorite: "Added to favorites.", removedFavorite: "Removed from favorites.",
 		selection: "Your selection", emptyFavorites: "You do not have any favorite products yet.", viewProduct: "View product",
-		yourRequest: "Your request", quoteList: "Quote list", emptyQuote: "Your quote list is empty.", requestWhatsapp: "Request on WhatsApp",
+		favoritesIntro: "Save products here when you want to order them again.", favoriteSummary: "Favorites summary", addFavoriteQuote: "Add to quote", addAllFavorites: "Add all to quote", removeFavorite: "Remove from favorites", favoritesAddedToQuote: "Products added to your quote.",
+		yourRequest: "Your request", quoteList: "Your quote", emptyQuote: "You have not added any products to your quote yet.", requestWhatsapp: "Request a quote on WhatsApp",
+		quoteInstructions: "Review your products and quantities before requesting pricing.", quoteSummary: "Quote summary", distinctProducts: "Different products", requestedUnits: "Requested units",
+		quotePriceNote: "Pricing will be confirmed when your quote is prepared.", removeItem: "Remove", continueShopping: "Continue browsing", browseCatalog: "Explore catalog",
 		quoteMessage: "Hello SAMA, I would like a quote for: ", noAccount: "Accounts will be available soon.",
 		switchToDark: "Switch to dark mode", switchToLight: "Switch to light mode", language: "Language",
 		countProducts: "{count} products", countOne: "1 product",
@@ -174,24 +180,25 @@ function render() {
 	document.title = state.language === "en" ? "SAMA Distribution | Business Supplies" : "Distribuidora SAMA | Suministros para tu empresa";
 	const description = document.querySelector('meta[name="description"]');
 	if (description) description.content = t("metaDescription");
+	const catalogCount = state.category === "Todos" && !state.query ? products.length : filteredProducts().length;
 	app.innerHTML = `
 		<div class="topbar"><strong>${t("service")}</strong><span>${t("hours")}</span></div>
 		<header class="site-header">
 			<div class="nav">
 				<a class="brand" href="#" data-home><img src="./Logo y Banner/Logo.jpg" alt="SAMA"><b class="brand-text">SAMA<span>Distribuidora</span></b></a>
 				<form class="search" id="search-form"><select id="category-filter" aria-label="${t("categoryFilter")}"><option value="Todos">${t("searchAll")}</option>${categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join("")}</select><input id="search-input" value="${escapeHtml(state.query)}" placeholder="${t("searchPlaceholder")}" aria-label="${t("search")}"><button aria-label="${t("search")}">⌕</button></form>
-				<div class="header-actions"><div class="appearance-controls"><select id="language-select" aria-label="${t("language")}"><option value="es" ${state.language === "es" ? "selected" : ""}>ES</option><option value="en" ${state.language === "en" ? "selected" : ""}>EN</option></select><button class="theme-toggle" data-theme-toggle type="button" title="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}" aria-label="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}">${state.theme === "dark" ? "☀" : "☾"}</button></div><button class="icon-button" data-favorites title="${t("favorites")}">♡ <span>${t("favorites")}</span><i class="count">${state.favorites.length}</i></button><button class="icon-button" data-cart title="${t("quote")}">▱ <span>${t("quote")}</span><i class="count">${state.cart.length}</i></button></div>
+				<div class="header-actions"><div class="appearance-controls"><select id="language-select" aria-label="${t("language")}"><option value="es" ${state.language === "es" ? "selected" : ""}>ES</option><option value="en" ${state.language === "en" ? "selected" : ""}>EN</option></select><button class="theme-toggle" data-theme-toggle type="button" title="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}" aria-label="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}">${state.theme === "dark" ? "☀" : "☾"}</button></div><button class="icon-button" data-favorites title="${t("favorites")}">♡ <span>${t("favorites")}</span><i class="count">${state.favorites.length}</i></button><button class="icon-button" data-cart title="${t("quote")}">▱ <span>${t("quote")}</span><i class="count">${cartUnitCount()}</i></button></div>
 			</div>
 			<nav class="category-bar"><div class="category-nav"><button class="${state.category === "Todos" ? "active" : ""}" data-category="Todos">${t("viewAll")}</button>${categories.map(c => `<button class="${state.category === c.name ? "active" : ""}" data-category="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`).join("")}</div></nav>
 		</header>
 		<main>
 			<section class="hero"><div class="hero-card"><div class="hero-copy"><span class="eyebrow">${t("eyebrow")}</span><h1>${t("heroTitle")}</h1><p>${t("heroBody")}</p><button class="primary-button" data-scroll-products>${t("browse")}</button></div></div></section>
 			<section class="section" id="categorias"><div class="section-heading"><div><h2>${t("shopCategory")}</h2><p>${t("findQuickly")}</p></div><button class="text-link" data-scroll-products>${t("viewCatalog")}</button></div><div class="category-grid">${categories.map(c => `<button class="category-card" data-category="${escapeHtml(c.name)}"><span class="category-icon">${c.icon}</span><strong>${escapeHtml(c.name)}</strong><small>${products.filter(product => product.category === c.name).length === 1 ? t("countOne") : t("countProducts", { count: products.filter(product => product.category === c.name).length })}</small></button>`).join("")}</div></section>
-			<section class="section" id="catalog"><div class="section-heading"><div><h2>${state.category === "Todos" ? t("featured") : escapeHtml(state.category)}</h2><p>${t("addForQuote")}</p></div><span class="sku">${state.loading ? t("loading") : `${filteredProducts().length} ${t("results")}`}</span></div><div class="product-grid">${productCards()}</div></section>
+			<section class="section" id="catalog"><div class="section-heading"><div><h2>${state.category === "Todos" ? (state.query ? t("featured") : t("catalogByCategory")) : escapeHtml(state.category)}</h2><p>${t("addForQuote")}</p></div><span class="sku">${state.loading ? t("loading") : `${catalogCount} ${t("results")}`}</span></div>${catalogContent()}</section>
 			<section class="info-band"><div class="info-items"><div class="info-item"><b>${t("attention")}</b><span>${t("helpChoose")}</span></div><div class="info-item"><b>${t("businessCatalog")}</b><span>${t("bulkSolutions")}</span></div><div class="info-item"><b>${t("noCommitment")}</b><span>${t("quoteWhatsapp")}</span></div></div></section>
 		</main>
 		<footer><div class="footer-grid"><div><h3>SAMA</h3><p>${t("footerAbout")}</p></div><div><h3>${t("links")}</h3><p><a href="#catalog">${t("catalog")}</a><br><a href="#categorias">${t("categories")}</a><br><a href="#faq">${t("faq")}</a></p></div><div><h3>${t("contact")}</h3><p>${t("whatsapp")}: ${t("contactPending")}<br>Email: ${t("contactPending")}<br>${t("schedule")}</p></div></div></footer>
-		<nav class="mobile-nav"><button data-scroll-products><strong>⌂</strong>${t("store")}</button><button data-favorites><strong>♡</strong>${t("favorites")}</button><button data-cart><strong>▱</strong>${t("quote")} (${state.cart.length})</button><button data-account><strong>♙</strong>${t("account")}</button></nav><a class="whatsapp" href="https://wa.me/" target="_blank" rel="noreferrer" aria-label="${t("contactWhatsApp")}">◉</a><div class="toast" id="toast"></div><div class="modal-backdrop" id="modal"></div>`;
+		<nav class="mobile-nav"><button data-scroll-products><strong>⌂</strong>${t("store")}</button><button data-favorites><strong>♡</strong>${t("favorites")}</button><button data-cart><strong>▱</strong>${t("quote")} (${cartUnitCount()})</button><button data-account><strong>♙</strong>${t("account")}</button></nav><a class="whatsapp" href="https://wa.me/" target="_blank" rel="noreferrer" aria-label="${t("contactWhatsApp")}">◉</a><div class="toast" id="toast"></div><div class="modal-backdrop" id="modal"></div>`;
 	bindEvents();
 }
 
@@ -199,10 +206,24 @@ function filteredProducts() {
 	const matches = products.filter(p => (state.category === "Todos" || p.category === state.category) && `${p.name} ${p.sku} ${p.description}`.toLowerCase().includes(state.query.toLowerCase()));
 	return state.category === "Todos" && !state.query ? matches.filter(product => product.isFeatured) : matches;
 }
-function productCards() {
+function catalogContent() {
+	if (state.loading || state.loadError || state.category !== "Todos" || state.query) return `<div class="product-grid">${productCards()}</div>`;
+	const workbookDivisions = ["Limpieza", "Oficina", "Farmacia", "Electrodomésticos y Tecnología", "Covid-19"];
+	const divisions = `<div class="catalog-divider-list">${workbookDivisions.map(name => `<section class="catalog-divider"><h3>${escapeHtml(name)}</h3></section>`).join("")}</div>`;
+	const groups = categories.map(category => ({
+		category,
+		products: products.filter(product => product.category === category.name),
+	})).filter(group => group.products.length);
+	if (!groups.length) return `<div class="product-grid">${productCards()}</div>${divisions}`;
+	return `<div class="catalog-groups">${groups.map(group => {
+		const count = group.products.length;
+		const countLabel = count === 1 ? t("countOne") : t("countProducts", { count });
+		return `<section class="catalog-group"><header class="catalog-group-heading"><div><span class="product-category">${escapeHtml(group.category.icon)} · ${t("categories")}</span><h3>${escapeHtml(group.category.name)}</h3><span class="sku">${countLabel}</span></div><button class="text-link" data-category="${escapeHtml(group.category.name)}">${t("seeCategory")} →</button></header><div class="product-grid">${productCards(group.products.slice(0, 4))}</div></section>`;
+	}).join("")}</div>${divisions}`;
+}
+function productCards(result = filteredProducts()) {
 	if (state.loading) return `<div class="empty-state">${t("loading")}</div>`;
 	if (state.loadError) return `<div class="empty-state">${escapeHtml(state.loadError)}<br><button class="text-link" data-retry>${t("retry")}</button></div>`;
-	const result = filteredProducts();
 	if (!result.length) {
 		const message = products.length && state.category === "Todos" && !state.query
 			? t("noFeatured")
@@ -259,20 +280,79 @@ function toggleFavorite(sku) {
 }
 function showFavorites() {
 	const favoriteProducts = products.filter(product => state.favorites.includes(product.sku));
-	const details = favoriteProducts.length
-		? favoriteProducts.map(product => `<p><b>${escapeHtml(product.name)}</b><br><span class="sku">SKU: ${escapeHtml(product.sku)}</span><br><button class="text-link" data-favorite-open="${escapeHtml(product.sku)}">${t("viewProduct")}</button></p>`).join("")
-		: `<p>${t("emptyFavorites")}</p>`;
 	const modal = document.querySelector("#modal");
-	modal.innerHTML = `<div class="modal"><button class="modal-close" data-close aria-label="${t("close")}">×</button><div class="modal-content"><div><span class="eyebrow">${t("selection")}</span><h2>${t("favorites")}</h2>${details}</div><div class="modal-image"><img src="${escapeHtml(imagePath)}" alt="SAMA"></div></div></div>`;
+	const details = favoriteProducts.map(product => `<article class="favorite-item"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"><div class="favorite-item-info"><span class="product-category">${escapeHtml(product.category)}</span><h3>${escapeHtml(product.name)}</h3><span class="sku">SKU: ${escapeHtml(product.sku)}</span></div><div class="favorite-item-actions"><button class="primary-button" type="button" data-favorite-add="${escapeHtml(product.sku)}">${t("addFavoriteQuote")}</button><button class="secondary-button" type="button" data-favorite-open="${escapeHtml(product.sku)}">${t("viewProduct")}</button><button class="favorite-remove" type="button" data-favorite-remove="${escapeHtml(product.sku)}">${t("removeFavorite")}</button></div></article>`).join("");
+	const content = favoriteProducts.length
+		? `<div class="favorite-layout"><div class="favorite-items">${details}</div><aside class="favorite-summary"><h3>${t("favoriteSummary")}</h3><div class="quote-summary-row"><span>${t("favorites")}</span><strong>${favoriteProducts.length}</strong></div><div class="quote-summary-row"><span>${t("quote")}</span><strong>${state.cart.length}</strong></div><p>${t("favoritesIntro")}</p><button class="primary-button" type="button" data-favorite-add-all>${t("addAllFavorites")}</button></aside></div>`
+		: `<div class="favorite-empty"><h3>${t("emptyFavorites")}</h3><p>${t("favoritesIntro")}</p><button class="primary-button" type="button" data-favorite-browse>${t("browseCatalog")}</button></div>`;
+	modal.innerHTML = `<div class="modal quote-modal favorite-modal"><button class="modal-close" data-close aria-label="${t("close")}">×</button><header class="quote-header"><span class="eyebrow">${t("selection")}</span><h2>${t("favorites")}</h2><p>${t("favoritesIntro")}</p></header>${content}</div>`;
 	modal.classList.add("open");
 	modal.querySelector("[data-close]").addEventListener("click", () => modal.classList.remove("open"));
+	modal.addEventListener("click", event => { if (event.target === modal) modal.classList.remove("open"); }, { once: true });
 	modal.querySelectorAll("[data-favorite-open]").forEach(button => button.addEventListener("click", () => openModal(products.find(product => product.sku === button.dataset.favoriteOpen))));
+	modal.querySelectorAll("[data-favorite-add]").forEach(button => button.addEventListener("click", () => {
+		const product = products.find(entry => entry.sku === button.dataset.favoriteAdd);
+		if (!product) return;
+		const item = state.cart.find(entry => entry.sku === product.sku);
+		if (item) item.quantity = Math.max(1, Number(item.quantity) || 1) + 1;
+		else state.cart.push({ sku: product.sku, name: product.name, quantity: 1 });
+		save(); render(); showFavorites(); toast(t("addedQuote", { name: product.name }));
+	}));
+	modal.querySelectorAll("[data-favorite-remove]").forEach(button => button.addEventListener("click", () => {
+		state.favorites = state.favorites.filter(sku => sku !== button.dataset.favoriteRemove);
+		save(); render(); showFavorites(); toast(t("removedFavorite"));
+	}));
+	modal.querySelector("[data-favorite-add-all]")?.addEventListener("click", () => {
+		favoriteProducts.forEach(product => {
+			const item = state.cart.find(entry => entry.sku === product.sku);
+			if (item) item.quantity = Math.max(1, Number(item.quantity) || 1) + 1;
+			else state.cart.push({ sku: product.sku, name: product.name, quantity: 1 });
+		});
+		save(); render(); showFavorites(); toast(t("favoritesAddedToQuote"));
+	});
+	modal.querySelector("[data-favorite-browse]")?.addEventListener("click", () => {
+		modal.classList.remove("open");
+		document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" });
+	});
+}
+function cartUnitCount() {
+	return state.cart.reduce((total, item) => total + Math.max(1, Number(item.quantity) || 1), 0);
 }
 function showCart() {
-	const details = state.cart.length ? state.cart.map(i => `<p><b>${escapeHtml(i.quantity)} ×</b> ${escapeHtml(i.name)}<br><span class="sku">SKU: ${escapeHtml(i.sku)}</span></p>`).join("") : `<p>${t("emptyQuote")}</p>`;
-	const modal = document.querySelector("#modal"); modal.innerHTML = `<div class="modal"><button class="modal-close" data-close aria-label="${t("close")}">×</button><div class="modal-content"><div><span class="eyebrow">${t("yourRequest")}</span><h2>${t("quoteList")}</h2>${details}<button class="primary-button" data-whatsapp ${state.cart.length ? "" : "disabled"}>${t("requestWhatsapp")}</button></div><div class="modal-image"><img src="${escapeHtml(imagePath)}" alt="SAMA"></div></div></div>`; modal.classList.add("open");
+	const modal = document.querySelector("#modal");
+	const details = state.cart.map(item => {
+		const product = products.find(entry => entry.sku === item.sku);
+		const name = product?.name || item.name;
+		const quantity = Math.max(1, Number(item.quantity) || 1);
+		return `<article class="quote-item"><img src="${escapeHtml(product ? productImage(product) : imagePath)}" alt="${escapeHtml(name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"><div class="quote-item-info"><span class="product-category">${escapeHtml(product?.category || t("quote"))}</span><h3>${escapeHtml(name)}</h3><span class="sku">SKU: ${escapeHtml(item.sku)}</span></div><div class="quote-item-actions"><div class="quote-stepper" aria-label="${t("quantity")}"><button type="button" data-cart-change="${escapeHtml(item.sku)}" data-step="-1" aria-label="${t("decreaseQuantity")}" ${quantity === 1 ? "disabled" : ""}>−</button><span>${quantity}</span><button type="button" data-cart-change="${escapeHtml(item.sku)}" data-step="1" aria-label="${t("increaseQuantity")}">+</button></div><button class="quote-remove" type="button" data-cart-remove="${escapeHtml(item.sku)}">${t("removeItem")}</button></div></article>`;
+	}).join("");
+	const units = cartUnitCount();
+	const content = state.cart.length
+		? `<div class="quote-layout"><div class="quote-items">${details}</div><aside class="quote-summary"><h3>${t("quoteSummary")}</h3><div class="quote-summary-row"><span>${t("distinctProducts")}</span><strong>${state.cart.length}</strong></div><div class="quote-summary-row"><span>${t("requestedUnits")}</span><strong>${units}</strong></div><p>${t("quotePriceNote")}</p><button class="primary-button" data-whatsapp>${t("requestWhatsapp")}</button><button class="text-link" data-cart-browse>${t("continueShopping")}</button></aside></div>`
+		: `<div class="quote-layout"><div class="quote-empty"><h3>${t("emptyQuote")}</h3><button class="primary-button" data-cart-browse>${t("browseCatalog")}</button></div><aside class="quote-summary"><h3>${t("quoteSummary")}</h3><div class="quote-summary-row"><span>${t("distinctProducts")}</span><strong>0</strong></div><div class="quote-summary-row"><span>${t("requestedUnits")}</span><strong>0</strong></div><p>${t("quoteInstructions")}</p><button class="primary-button" data-whatsapp disabled>${t("requestWhatsapp")}</button></aside></div>`;
+	modal.innerHTML = `<div class="modal quote-modal"><button class="modal-close" data-close aria-label="${t("close")}">×</button><header class="quote-header"><span class="eyebrow">${t("yourRequest")}</span><h2>${t("quoteList")}</h2><p>${t("quoteInstructions")}</p></header>${content}</div>`;
+	modal.classList.add("open");
 	modal.querySelector("[data-close]").addEventListener("click", () => modal.classList.remove("open"));
-	const whatsapp = modal.querySelector("[data-whatsapp]"); if (whatsapp) whatsapp.addEventListener("click", () => { window.open(`https://wa.me/?text=${encodeURIComponent(t("quoteMessage") + state.cart.map(i => `${i.quantity}x ${i.name}`).join(", "))}`, "_blank"); });
+	modal.addEventListener("click", event => { if (event.target === modal) modal.classList.remove("open"); }, { once: true });
+	modal.querySelectorAll("[data-cart-change]").forEach(button => button.addEventListener("click", () => {
+		const item = state.cart.find(entry => entry.sku === button.dataset.cartChange);
+		if (!item) return;
+		item.quantity = Math.max(1, (Number(item.quantity) || 1) + Number(button.dataset.step));
+		save(); render(); showCart();
+	}));
+	modal.querySelectorAll("[data-cart-remove]").forEach(button => button.addEventListener("click", () => {
+		state.cart = state.cart.filter(item => item.sku !== button.dataset.cartRemove);
+		save(); render(); showCart();
+	}));
+	modal.querySelectorAll("[data-cart-browse]").forEach(button => button.addEventListener("click", () => {
+		modal.classList.remove("open");
+		document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" });
+	}));
+	const whatsapp = modal.querySelector("[data-whatsapp]");
+	if (whatsapp && state.cart.length) whatsapp.addEventListener("click", () => {
+		const lines = state.cart.map(item => `${item.quantity}x ${item.name} (SKU: ${item.sku})`).join("\n");
+		window.open(`https://wa.me/?text=${encodeURIComponent(t("quoteMessage") + lines)}`, "_blank");
+	});
 }
 function bindEvents() {
 	document.querySelector("#language-select").addEventListener("change", event => { state.language = event.target.value; render(); });
