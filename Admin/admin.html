@@ -20,6 +20,7 @@
       window.SAMA_DESCRIPTION_WORKER_URL = "https://sama-description-api.developpage.workers.dev";
     </script>
     <script src="js/product-description.js" defer></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
     <script src="js/sama-admin.js" defer></script>
   </head>
   <body>
@@ -37,18 +38,33 @@
           </select>
           <button class="button theme-toggle" id="theme-toggle" type="button" title="Cambiar tema" aria-label="Cambiar tema">☾</button>
           <button class="button" id="refresh-catalog" type="button" data-i18n="refresh">Actualizar</button>
+          <button class="button" id="sign-out" type="button" data-i18n="signOut" hidden>Cerrar sesión</button>
           <a class="back-link" href="../index.html" data-i18n="backToCatalog">Volver al catálogo <span aria-hidden="true">↗</span></a>
         </div>
       </header>
 
-      <main class="workspace">
+      <section class="auth-panel" id="auth-panel">
+        <div class="auth-card">
+          <p class="eyebrow" data-i18n="adminAccess">ACCESO ADMINISTRADOR</p>
+          <h1 data-i18n="signInTitle">Iniciar sesión</h1>
+          <p class="page-description" data-i18n="signInDescription">Accede para consultar e importar productos.</p>
+          <form id="sign-in-form">
+            <label><span data-i18n="email">Correo</span><input id="auth-email" type="email" autocomplete="username" required /></label>
+            <label><span data-i18n="password">Contraseña</span><input id="auth-password" type="password" autocomplete="current-password" required /></label>
+            <button class="button" type="submit" data-i18n="signIn">Iniciar sesión</button>
+          </form>
+          <p class="auth-message" id="auth-message" role="alert"></p>
+        </div>
+      </section>
+
+      <main class="workspace" hidden>
         <section class="page-heading">
           <div>
             <p class="eyebrow" data-i18n="catalog">CATÁLOGO</p>
             <h1 data-i18n="adminTitle">Administración SAMA</h1>
             <p class="page-description" data-i18n="adminDescription">Consulta productos, categorías y marcas activas.</p>
           </div>
-          <span class="read-only-label" data-i18n="readOnly">Solo lectura</span>
+          <span class="read-only-label" data-i18n="readOnly">Consulta e importación</span>
         </section>
 
         <section class="catalog-panel" aria-label="Catálogo de SAMA">
@@ -61,11 +77,17 @@
               <span class="sr-only" data-i18n="recordType">Tipo de registro</span>
               <select id="catalog-view">
                 <option value="products" data-i18n="products">Productos</option>
-                <option value="categories" data-i18n="categories">Categorías</option>
-                <option value="brands" data-i18n="brands">Marcas</option>
+                <option value="cleaning" data-i18n="cleaning">Limpieza</option>
+                <option value="office" data-i18n="office">Oficina</option>
+                <option value="pharmacy" data-i18n="pharmacy">Farmacia</option>
+                <option value="appliances" data-i18n="appliances">Electrodomésticos</option>
+                <option value="covid19" data-i18n="covid19">Covid-19</option>
               </select>
             </label>
+            <input id="excel-import-input" type="file" accept=".xlsx,.xls" hidden />
+            <button class="button" id="import-excel" type="button" data-i18n="importExcel">Importar Excel</button>
           </div>
+          <p class="import-status" id="import-status" role="status" aria-live="polite"></p>
 
           <div class="table-meta">
             <span id="view-label">Productos</span>

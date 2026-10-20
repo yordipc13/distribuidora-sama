@@ -16,6 +16,11 @@ const themeToggle = document.querySelector("#theme-toggle");
 const importButton = document.querySelector("#import-excel");
 const importInput = document.querySelector("#excel-import-input");
 const importStatus = document.querySelector("#import-status");
+const authPanel = document.querySelector("#auth-panel");
+const workspace = document.querySelector(".workspace");
+const signInForm = document.querySelector("#sign-in-form");
+const signOutButton = document.querySelector("#sign-out");
+const authMessage = document.querySelector("#auth-message");
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let manualTheme = false;
 let language = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
@@ -25,10 +30,10 @@ const translations = {
   es: {
     title: "Administración de catálogo | SAMA", refresh: "Actualizar", backToCatalog: "Volver al catálogo",
     catalog: "CATÁLOGO", catalogAria: "Catálogo de SAMA", adminTitle: "Administración SAMA", adminDescription: "Consulta productos, categorías y marcas activas.",
-    readOnly: "Consulta e importación", importExcel: "Importar Excel", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19", multiCategory: "Multicategoría", categories: "Categorías", brands: "Marcas",
+    readOnly: "Consulta e importación", importExcel: "Importar Excel", signOut: "Cerrar sesión", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
     footerTitle: "SAMA · Catálogo", footerData: "Datos activos de Supabase", searchPlaceholder: "Buscar en el catálogo...",
     results: "registros", result: "registro",     loading: "Conectando a Supabase...", connected: "Conectado a Supabase", generatingDescriptions: "Generando descripciones:",
-    clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}",
+    clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}", authError: "No se pudo iniciar sesión: {message}", notAdmin: "La cuenta no tiene permisos de administrador.",
     noMatches: "No encontramos registros", noProducts: "Aún no hay productos", noCategories: "Aún no hay categorías", noBrands: "Aún no hay marcas",
     noActiveRecords: "No hay registros activos cargados en Supabase.", searchHint: "Prueba con otro término de búsqueda.",
     filterHint: "Pulsa un encabezado para añadir un filtro. Vuelve a pulsarlo para quitarlo.",
@@ -39,10 +44,10 @@ const translations = {
   en: {
     title: "Catalog administration | SAMA", refresh: "Refresh", backToCatalog: "Back to catalog",
     catalog: "CATALOG", catalogAria: "SAMA catalog", adminTitle: "SAMA administration", adminDescription: "View active products, categories, and brands.",
-    readOnly: "View and import", importExcel: "Import Excel", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19", multiCategory: "Multi-category", categories: "Categories", brands: "Brands",
+    readOnly: "View and import", importExcel: "Import Excel", signOut: "Sign out", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
     footerTitle: "SAMA · Catalog", footerData: "Active Supabase data", searchPlaceholder: "Search the catalog...",
     results: "records", result: "record",     loading: "Connecting to Supabase...", connected: "Connected to Supabase", generatingDescriptions: "Generating descriptions:",
-    clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}",
+    clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}", authError: "Could not sign in: {message}", notAdmin: "This account does not have administrator permissions.",
     noMatches: "No records found", noProducts: "No products yet", noCategories: "No categories yet", noBrands: "No brands yet",
     noActiveRecords: "There are no active records in Supabase.", searchHint: "Try a different search term.",
     filterHint: "Click a column heading to add a filter. Click it again to remove it.",
@@ -85,6 +90,34 @@ function applyTheme(theme) {
   themeToggle.setAttribute("aria-label", label);
   const themeColor = document.querySelector('meta[name="theme-color"]');
   if (themeColor) themeColor.content = theme === "dark" ? "#0b1220" : "#f6f8f7";
+}
+
+function setAuthenticatedUI(user) {
+  const authenticated = Boolean(user);
+  authPanel.hidden = authenticated;
+  workspace.hidden = !authenticated;
+  signOutButton.hidden = !authenticated;
+  refreshButton.hidden = !authenticated;
+}
+
+async function openAdminSession() {
+  if (!client) {
+    authMessage.textContent = t("clientUnavailable");
+    return;
+  }
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+  const user = data.session?.user;
+  if (!user) {
+    setAuthenticatedUI(null);
+    return;
+  }
+  if (user.app_metadata?.role !== "admin") {
+    await client.auth.signOut();
+    throw new Error(t("notAdmin"));
+  }
+  setAuthenticatedUI(user);
+  await loadView();
 }
 
 const views = {
@@ -385,4 +418,43 @@ importInput.addEventListener("change", async event => {
     refreshButton.disabled = false;
   }
 });
-loadView();
+signInForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  authMessage.textContent = "";
+  const submitButton = signInForm.querySelector("button[type=submit]");
+  submitButton.disabled = true;
+  try {
+    if (!client) throw new Error(t("clientUnavailable"));
+    const { data, error } = await client.auth.signInWithPassword({
+      email: document.querySelector("#auth-email").value.trim(),
+      password: document.querySelector("#auth-password").value,
+    });
+    if (error) throw error;
+    if (data.user?.app_metadata?.role !== "admin") {
+      await client.auth.signOut();
+      throw new Error(t("notAdmin"));
+    }
+    setAuthenticatedUI(data.user);
+    await loadView();
+  } catch (error) {
+    authMessage.textContent = t("authError", { message: error.message || t("notAdmin") });
+    setAuthenticatedUI(null);
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+signOutButton.addEventListener("click", async () => {
+  const { error } = await client.auth.signOut();
+  if (error) {
+    statusElement.textContent = t("connectionError", { message: error.message });
+    statusElement.dataset.state = "error";
+    return;
+  }
+  records = [];
+  setAuthenticatedUI(null);
+  render();
+});
+openAdminSession().catch(error => {
+  setAuthenticatedUI(null);
+  authMessage.textContent = t("authError", { message: error.message || t("notAdmin") });
+});
