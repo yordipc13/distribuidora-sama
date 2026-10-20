@@ -13,6 +13,9 @@ const refreshButton = document.querySelector("#refresh-catalog");
 const filterHint = document.querySelector("#filter-hint");
 const languageSelect = document.querySelector("#admin-language");
 const themeToggle = document.querySelector("#theme-toggle");
+const importButton = document.querySelector("#import-excel");
+const importInput = document.querySelector("#excel-import-input");
+const importStatus = document.querySelector("#import-status");
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let manualTheme = false;
 let language = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
@@ -22,29 +25,29 @@ const translations = {
   es: {
     title: "Administración de catálogo | SAMA", refresh: "Actualizar", backToCatalog: "Volver al catálogo",
     catalog: "CATÁLOGO", catalogAria: "Catálogo de SAMA", adminTitle: "Administración SAMA", adminDescription: "Consulta productos, categorías y marcas activas.",
-    readOnly: "Solo lectura", recordType: "Tipo de registro", products: "Productos", categories: "Categorías", brands: "Marcas",
+    readOnly: "Consulta e importación", importExcel: "Importar Excel", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19", multiCategory: "Multicategoría", categories: "Categorías", brands: "Marcas",
     footerTitle: "SAMA · Catálogo", footerData: "Datos activos de Supabase", searchPlaceholder: "Buscar en el catálogo...",
-    results: "registros", result: "registro", loading: "Conectando a Supabase...", connected: "Conectado a Supabase",
+    results: "registros", result: "registro",     loading: "Conectando a Supabase...", connected: "Conectado a Supabase", generatingDescriptions: "Generando descripciones:",
     clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}",
     noMatches: "No encontramos registros", noProducts: "Aún no hay productos", noCategories: "Aún no hay categorías", noBrands: "Aún no hay marcas",
     noActiveRecords: "No hay registros activos cargados en Supabase.", searchHint: "Prueba con otro término de búsqueda.",
     filterHint: "Pulsa un encabezado para añadir un filtro. Vuelve a pulsarlo para quitarlo.",
     filterColumn: "Filtrar por {column}", removeFilter: "Quitar filtro de {column}", columnPlaceholder: "Filtrar...",
-    sku: "SKU", product: "Producto", category: "Categoría", brand: "Marca", subcategory: "Subcategoría", stock: "Existencias", featured: "Destacado", slug: "Identificador",
+    sku: "SKU", product: "Producto", category: "Categoría", brand: "Marca", subcategory: "Subcategoría", description: "Descripción", image: "Imagen", stock: "Existencias", featured: "Destacado", slug: "Identificador",
     yes: "Sí", no: "No", switchToDark: "Activar modo oscuro", switchToLight: "Activar modo claro", language: "Idioma",
   },
   en: {
     title: "Catalog administration | SAMA", refresh: "Refresh", backToCatalog: "Back to catalog",
     catalog: "CATALOG", catalogAria: "SAMA catalog", adminTitle: "SAMA administration", adminDescription: "View active products, categories, and brands.",
-    readOnly: "Read only", recordType: "Record type", products: "Products", categories: "Categories", brands: "Brands",
+    readOnly: "View and import", importExcel: "Import Excel", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19", multiCategory: "Multi-category", categories: "Categories", brands: "Brands",
     footerTitle: "SAMA · Catalog", footerData: "Active Supabase data", searchPlaceholder: "Search the catalog...",
-    results: "records", result: "record", loading: "Connecting to Supabase...", connected: "Connected to Supabase",
+    results: "records", result: "record",     loading: "Connecting to Supabase...", connected: "Connected to Supabase", generatingDescriptions: "Generating descriptions:",
     clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}",
     noMatches: "No records found", noProducts: "No products yet", noCategories: "No categories yet", noBrands: "No brands yet",
     noActiveRecords: "There are no active records in Supabase.", searchHint: "Try a different search term.",
     filterHint: "Click a column heading to add a filter. Click it again to remove it.",
     filterColumn: "Filter by {column}", removeFilter: "Remove {column} filter", columnPlaceholder: "Filter...",
-    sku: "SKU", product: "Product", category: "Category", brand: "Brand", subcategory: "Subcategory", stock: "Stock", featured: "Featured", slug: "Identifier",
+    sku: "SKU", product: "Product", category: "Category", brand: "Brand", subcategory: "Subcategory", description: "Description", image: "Image", stock: "Stock", featured: "Featured", slug: "Identifier",
     yes: "Yes", no: "No", switchToDark: "Switch to dark mode", switchToLight: "Switch to light mode", language: "Language",
   },
 };
@@ -88,39 +91,147 @@ const views = {
   products: {
     labelKey: "products",
     columns: [
-      ["sku", "sku"],
-      ["name", "product"],
-      ["category", "category"],
-      ["brand", "brand"],
-      ["subcategory", "subcategory"],
+      ["Sku", "sku"],
+      ["Producto", "product"],
+      ["Categoria", "category"],
+      ["Subcategoria", "subcategory"],
+      ["descripcion", "description"],
+      ["Image(url)", "image"],
       ["stock", "stock"],
-      ["is_featured", "featured"],
     ],
     load: () => client.from("products")
-      .select("sku,name,category:categories(name),brand:brands(name),subcategory,stock,is_featured")
+      .select("*")
       .eq("is_active", true)
-      .order("name"),
-  },
-  categories: {
-    labelKey: "categories",
-    columns: [["name", "category"], ["slug", "slug"]],
-    load: () => client.from("categories").select("name,slug").eq("is_active", true).order("name"),
-  },
-  brands: {
-    labelKey: "brands",
-    columns: [["name", "brand"], ["slug", "slug"]],
-    load: () => client.from("brands").select("name,slug").eq("is_active", true).order("name"),
+      .order("Producto"),
   },
 };
 
+const productCategoryViews = {
+  cleaning: ["Limpieza"],
+  office: ["Oficina"],
+  pharmacy: ["Farmacia", "farmacia"],
+  appliances: ["Electrodomésticos", "Electrodomesticos"],
+  covid19: ["Covid-19", "COVID-19", "COVID.19"],
+};
+
+for (const [viewKey, categoryNames] of Object.entries(productCategoryViews)) {
+  views[viewKey] = {
+    ...views.products,
+    labelKey: viewKey,
+    emptyTitleKey: "noProducts",
+    load: () => client.from("products")
+      .select("*")
+      .eq("is_active", true)
+      .or(categoryNames.map(categoryName => `Categoria.ilike.%${categoryName}%`).join(","))
+      .order("Producto"),
+  };
+}
+
 let records = [];
 const columnFilters = new Map();
+
+function normalizeHeader(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function excelValue(row, names) {
+  const entry = Object.entries(row).find(([key]) => names.includes(normalizeHeader(key)));
+  return entry ? entry[1] : "";
+}
+
+function toStock(value) {
+  if (value == null || value === "") return null;
+  const stock = Number(value);
+  if (!Number.isInteger(stock) || stock < 0) throw new Error(`Existencias inválidas: ${value}`);
+  return stock;
+}
+
+function toProductRow(row) {
+  const sku = String(excelValue(row, ["sku"])).trim();
+  const name = String(excelValue(row, ["producto", "product", "name"])).trim();
+  if (!sku || !name) throw new Error("Cada fila debe tener SKU y Producto.");
+
+  const categoryText = String(excelValue(row, ["categoria", "category"])).trim();
+  return {
+    sku,
+    producto: name,
+    stock: toStock(excelValue(row, ["stock", "existencias"])),
+    categoria: categoryText,
+    subcategoria: String(excelValue(row, ["subcategoria", "subcategory"])).trim(),
+    descripcion: excelValue(row, ["descripcion", "description"]),
+    imagen_url: String(excelValue(row, ["imagenurl", "imagen", "imageurl", "image"])).trim(),
+  };
+}
+
+async function importExcelFile(file) {
+  if (!window.XLSX) throw new Error("La biblioteca de Excel todavía no está disponible. Recarga el panel e inténtalo de nuevo.");
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!firstSheet) throw new Error("El archivo no contiene una primera hoja válida.");
+  const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+  if (!rows.length) throw new Error("La primera hoja no contiene productos.");
+
+  const products = rows.map(toProductRow);
+  const prepared = await window.SamaProductDescriptions.prepareProductsForSync(products, {
+    delayMs: 4500,
+    onProgress: progress => {
+      importStatus.textContent = `${t("generatingDescriptions")} ${progress.completed}/${progress.total} (${progress.sku})`;
+    },
+  });
+  const payload = prepared.map(product => ({
+    Sku: product.sku,
+    Producto: product.producto,
+    Categoria: product.categoria || null,
+    Subcategoria: product.subcategoria || null,
+    descripcion: product.descripcion || null,
+    "Image(url)": product.imagen_url || null,
+    stock: product.stock,
+    is_active: true,
+  }));
+
+  const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
+  if (error) throw error;
+  return { count: payload.length };
+}
 
 function valueFor(record, field) {
   const value = record[field];
   if (value && typeof value === "object") return value.name || "—";
   if (typeof value === "boolean") return value ? t("yes") : t("no");
   return value == null || value === "" ? "—" : String(value);
+}
+
+function categoryViewKey(categoryName) {
+  return `category-${normalizeHeader(categoryName)}`;
+}
+
+function addDiscoveredCategoryViews() {
+  const discovered = new Set(records.flatMap(record => String(record.Categoria ?? "")
+    .split(",")
+    .map(category => category.trim())
+    .filter(Boolean)));
+
+  for (const categoryName of discovered) {
+    const viewKey = categoryViewKey(categoryName);
+    if (!views[viewKey]) {
+      views[viewKey] = {
+        ...views.products,
+        label: categoryName,
+        labelKey: "",
+        load: () => client.from("products")
+          .select("*")
+          .eq("is_active", true)
+          .ilike("Categoria", `%${categoryName}%`)
+          .order("Producto"),
+      };
+    }
+    if (![...viewSelect.options].some(option => option.value === viewKey)) {
+      const option = document.createElement("option");
+      option.value = viewKey;
+      option.textContent = categoryName;
+      viewSelect.append(option);
+    }
+  }
 }
 
 function render() {
@@ -137,7 +248,7 @@ function render() {
     return globalMatch && columnMatch;
   });
 
-  viewLabel.textContent = t(view.labelKey);
+  viewLabel.textContent = view.label || t(view.labelKey);
   resultCount.textContent = `${filtered.length} ${filtered.length === 1 ? t("result") : t("results")}`;
   tableHead.replaceChildren();
   tableBody.replaceChildren();
@@ -200,7 +311,7 @@ function render() {
   }
 
   emptyState.hidden = filtered.length > 0;
-  emptyTitle.textContent = query ? t("noMatches") : t(`no${view.labelKey[0].toUpperCase()}${view.labelKey.slice(1)}`);
+  emptyTitle.textContent = query ? t("noMatches") : t(view.emptyTitleKey || `no${view.labelKey[0].toUpperCase()}${view.labelKey.slice(1)}`);
   emptyMessage.textContent = query ? t("searchHint") : t("noActiveRecords");
 }
 
@@ -220,6 +331,7 @@ async function loadView() {
     const { data, error } = await views[viewSelect.value].load();
     if (error) throw error;
     records = data || [];
+    if (viewSelect.value === "products") addDiscoveredCategoryViews();
     statusElement.textContent = t("connected");
     statusElement.dataset.state = "connected";
     render();
@@ -253,4 +365,24 @@ viewSelect.addEventListener("change", () => {
 });
 searchInput.addEventListener("input", render);
 refreshButton.addEventListener("click", loadView);
+importButton.addEventListener("click", () => importInput.click());
+importInput.addEventListener("change", async event => {
+  const [file] = event.currentTarget.files;
+  event.currentTarget.value = "";
+  if (!file) return;
+
+  importButton.disabled = true;
+  refreshButton.disabled = true;
+  importStatus.textContent = `${t("loading")} ${file.name}`;
+  try {
+    const result = await importExcelFile(file);
+    importStatus.textContent = `${result.count} productos importados.${result.multiCategoryCount ? ` ${result.multiCategoryCount} usan varias categorías; se guardó la primera como principal.` : ""}`;
+    await loadView();
+  } catch (error) {
+    importStatus.textContent = `Error de importación: ${error.message || "Error desconocido."}`;
+  } finally {
+    importButton.disabled = false;
+    refreshButton.disabled = false;
+  }
+});
 loadView();

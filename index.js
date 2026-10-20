@@ -32,6 +32,9 @@ const translations = {
 		quoteInstructions: "Revisa los productos y cantidades antes de solicitar tus precios.", quoteSummary: "Resumen de cotización", distinctProducts: "Productos diferentes", requestedUnits: "Unidades solicitadas",
 		quotePriceNote: "Los precios se confirman al preparar tu cotización.", removeItem: "Quitar", continueShopping: "Seguir viendo productos", browseCatalog: "Explorar catálogo",
 		quoteMessage: "Hola SAMA, deseo cotizar: ", noAccount: "La cuenta estará disponible próximamente.",
+		accountTitle: "Tu cuenta SAMA", signIn: "Iniciar sesión", signUp: "Crear cuenta", signOut: "Cerrar sesión",
+		email: "Correo electrónico", password: "Contraseña", switchToSignUp: "¿No tienes cuenta? Crear cuenta", switchToSignIn: "¿Ya tienes cuenta? Inicia sesión",
+		authError: "No se pudo completar el acceso: {message}", authWorking: "Procesando…", signUpConfirmation: "Revisa tu correo para confirmar la cuenta.", favoritesSyncError: "No se pudieron sincronizar tus favoritos. Verifica la configuración de la cuenta.",
 		switchToDark: "Activar modo oscuro", switchToLight: "Activar modo claro", language: "Idioma", switchToEnglish: "Cambiar a inglés", switchToSpanish: "Cambiar a español",
 		countProducts: "{count} productos", countOne: "1 producto",
 	},
@@ -68,6 +71,9 @@ const translations = {
 		quoteInstructions: "Review your products and quantities before requesting pricing.", quoteSummary: "Quote summary", distinctProducts: "Different products", requestedUnits: "Requested units",
 		quotePriceNote: "Pricing will be confirmed when your quote is prepared.", removeItem: "Remove", continueShopping: "Continue browsing", browseCatalog: "Explore catalog",
 		quoteMessage: "Hello SAMA, I would like a quote for: ", noAccount: "Accounts will be available soon.",
+		accountTitle: "Your SAMA account", signIn: "Sign in", signUp: "Create account", signOut: "Sign out",
+		email: "Email", password: "Password", switchToSignUp: "New here? Create an account", switchToSignIn: "Already have an account? Sign in",
+		authError: "Could not complete sign-in: {message}", authWorking: "Working…", signUpConfirmation: "Check your email to confirm your account.", favoritesSyncError: "Could not sync your favorites. Check the account setup.",
 		switchToDark: "Switch to dark mode", switchToLight: "Switch to light mode", language: "Language", switchToEnglish: "Switch to English", switchToSpanish: "Switch to Spanish",
 		countProducts: "{count} products", countOne: "1 product",
 	},
@@ -79,13 +85,27 @@ let manualTheme = false;
 const products = [];
 const PRODUCTS_TABLE = "products";
 const categoryIcons = ["▦", "✦", "⌁", "▤"];
-const heroCategories = [
+const defaultHeroCategories = [
 	{ name: "Limpieza", tone: "cleaning", icon: "✧" },
 	{ name: "Oficina", tone: "office", icon: "▤" },
 	{ name: "Farmacia", tone: "pharmacy", icon: "+" },
 	{ name: "Electrodomésticos y Tecnología", tone: "technology", icon: "⌘" },
 	{ name: "Covid-19", tone: "health", icon: "◉" },
 ];
+const categoryToneByName = {
+	"limpieza": "cleaning",
+	"cleaning": "cleaning",
+	"oficina": "office",
+	"office": "office",
+	"farmacia": "pharmacy",
+	"pharmacy": "pharmacy",
+	"electrodomésticos y tecnología": "technology",
+	"electrodomesticos y tecnologia": "technology",
+	"technology": "technology",
+	"covid-19": "health",
+	"health": "health",
+};
+let heroCategories = defaultHeroCategories;
 let activeHeroSlide = 0;
 let heroAutoplayTimer = null;
 const heroAutoplayDelay = 6000;
@@ -93,6 +113,9 @@ let heroAutoplayPaused = false;
 let heroSwipeStartX = null;
 let categoryMenuOpen = false;
 let activeMenuCategory = "";
+let currentUser = null;
+let authMode = "signin";
+let authMessage = "";
 let categories = [];
 let categoryRows = [];
 
@@ -112,6 +135,23 @@ function t(key, values = {}) {
 	let message = translations[state.language][key] ?? translations.es[key] ?? key;
 	for (const [name, value] of Object.entries(values)) message = message.replaceAll(`{${name}}`, String(value));
 	return message;
+}
+
+const englishCategoryLabels = {
+	"limpieza": "Cleaning",
+	"oficina": "Office",
+	"farmacia": "Pharmacy",
+	"electrodomésticos y tecnología": "Appliances & Technology",
+	"covid-19": "Covid-19",
+};
+
+function categoryLabel(name) {
+	if (state.language !== "en") return name;
+	return String(name ?? "").split(",").map(label => {
+		const trimmed = label.trim();
+		const normalized = trimmed.toLocaleLowerCase("es");
+		return englishCategoryLabels[normalized] || trimmed;
+	}).join(", ");
 }
 
 function applyTheme(theme) {
@@ -156,13 +196,15 @@ function normalizeProduct(row) {
 function rebuildCategories() {
 	const names = [...new Set([
 		...categoryRows.map(category => String(category.name ?? "").trim()),
-		...products.map(product => product.category),
+		...products.flatMap(product => product.category.split(",").map(category => category.trim())),
 	].filter(Boolean))];
 	categories = names.map((name, index) => ({
 		name,
 		icon: categoryIcons[index % categoryIcons.length],
-		count: products.filter(product => product.category === name).length,
+		count: products.filter(product => product.category.split(",").some(category => category.trim() === name)).length,
+		tone: categoryToneByName[name.toLocaleLowerCase("es")] || defaultHeroCategories[index % defaultHeroCategories.length].tone,
 	}));
+	heroCategories = categories.length ? categories : defaultHeroCategories;
 }
 
 async function loadProducts() {
@@ -207,13 +249,13 @@ function render() {
 			<div class="nav">
 				<a class="brand" href="#" data-home><img src="./Logo y Banner/Logo.jpg" alt="SAMA"><b class="brand-text">SAMA<span>Distribuidora</span></b></a>
 				<form class="search" id="search-form">${categoryMenuMarkup()}<input id="search-input" value="${escapeHtml(state.query)}" placeholder="${t("searchPlaceholder")}" aria-label="${t("search")}"><button class="search-submit" type="submit" aria-label="${t("search")}">⌕</button></form>
-				<div class="header-actions"><div class="appearance-controls"><button class="language-toggle" id="language-toggle" type="button" title="${t(state.language === "es" ? "switchToEnglish" : "switchToSpanish")}" aria-label="${t(state.language === "es" ? "switchToEnglish" : "switchToSpanish")}"><img class="language-flag" src="./Logo y Banner/flag-${state.language === "es" ? "us" : "es"}.svg" alt=""><span>${state.language === "es" ? "EN" : "ES"}</span></button><button class="theme-toggle" data-theme-toggle type="button" title="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}" aria-label="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}">${state.theme === "dark" ? "☀" : "☾"}</button></div><button class="icon-button" data-favorites title="${t("favorites")}">♡ <span>${t("favorites")}</span><i class="count">${state.favorites.length}</i></button><button class="icon-button" data-cart title="${t("quote")}">▱ <span>${t("quote")}</span><i class="count">${cartUnitCount()}</i></button></div>
+				<div class="header-actions"><div class="appearance-controls"><button class="language-toggle" id="language-toggle" type="button" title="${t(state.language === "es" ? "switchToEnglish" : "switchToSpanish")}" aria-label="${t(state.language === "es" ? "switchToEnglish" : "switchToSpanish")}"><img class="language-flag" src="./Logo y Banner/flag-${state.language === "es" ? "es" : "us"}.svg" alt=""><span>${state.language.toUpperCase()}</span></button><button class="theme-toggle" data-theme-toggle type="button" title="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}" aria-label="${t(state.theme === "dark" ? "switchToLight" : "switchToDark")}">${state.theme === "dark" ? "☀" : "☾"}</button></div><button class="icon-button account-button" data-account title="${currentUser?.email || t("signIn")}" aria-label="${currentUser?.email || t("signIn")}">♙ <span>${escapeHtml(currentUser?.email || t("signIn"))}</span></button><button class="icon-button" data-favorites title="${t("favorites")}">♡ <span>${t("favorites")}</span><i class="count">${state.favorites.length}</i></button><button class="icon-button" data-cart title="${t("quote")}">▱ <span>${t("quote")}</span><i class="count">${cartUnitCount()}</i></button></div>
 			</div>
 		</header>
 		<main>
 			<section class="hero"><div class="hero-card"><div class="hero-copy"><span class="eyebrow">${t("eyebrow")}</span><h1>${t("heroTitle")}</h1><p>${t("heroBody")}</p><button class="primary-button" data-scroll-products>${t("browse")}</button></div>${heroCarouselMarkup()}</div></section>
-			<section class="section" id="categorias"><div class="section-heading"><div><h2>${t("shopCategory")}</h2><p>${t("findQuickly")}</p></div><button class="text-link" data-scroll-products>${t("viewCatalog")}</button></div><div class="catalog-divider-grid">${heroCategories.map(category => `<article class="catalog-divider-card"><div class="catalog-divider-art" data-hero-tone="${category.tone}" aria-hidden="true"><span>${category.icon}</span></div><div class="catalog-divider-copy"><span class="product-category">${t("categories")}</span><h3>${escapeHtml(category.name)}</h3></div></article>`).join("")}</div></section>
-			<section class="section" id="catalog"><div class="section-heading"><div><h2>${state.subcategory ? escapeHtml(state.subcategory) : state.category === "Todos" ? (state.query ? t("featured") : t("catalogByCategory")) : escapeHtml(state.category)}</h2><p>${t("addForQuote")}</p></div><span class="sku">${state.loading ? t("loading") : `${catalogCount} ${t("results")}`}</span></div>${catalogContent()}</section>
+			<section class="section" id="categorias"><div class="section-heading"><div><h2>${t("shopCategory")}</h2><p>${t("findQuickly")}</p></div><button class="text-link" data-scroll-products>${t("viewCatalog")}</button></div><div class="catalog-divider-grid">${heroCategories.map(category => `			<article class="catalog-divider-card" data-category="${escapeHtml(category.name)}" tabindex="0" role="button"><div class="catalog-divider-art" data-category="${escapeHtml(category.name)}" data-hero-tone="${category.tone}" aria-hidden="true"><span>${category.icon}</span></div><div class="catalog-divider-copy"><span class="product-category">${t("categories")}</span><h3>${escapeHtml(categoryLabel(category.name))}</h3></div></article>`).join("")}</div></section>
+			<section class="section" id="catalog"><div class="section-heading"><div><h2>${state.subcategory ? escapeHtml(state.subcategory) : state.category === "Todos" ? (state.query ? t("featured") : t("catalogByCategory")) : escapeHtml(categoryLabel(state.category))}</h2><p>${t("addForQuote")}</p></div><span class="sku">${state.loading ? t("loading") : `${catalogCount} ${t("results")}`}</span></div>${catalogContent()}</section>
 			<section class="info-band"><div class="info-items"><div class="info-item"><b>${t("attention")}</b><span>${t("helpChoose")}</span></div><div class="info-item"><b>${t("businessCatalog")}</b><span>${t("bulkSolutions")}</span></div><div class="info-item"><b>${t("noCommitment")}</b><span>${t("quoteWhatsapp")}</span></div></div></section>
 		</main>
 		<footer><div class="footer-grid"><div><h3>SAMA</h3><p>${t("footerAbout")}</p></div><div><h3>${t("links")}</h3><p><a href="#catalog">${t("catalog")}</a><br><a href="#categorias">${t("categories")}</a><br><a href="#faq">${t("faq")}</a></p></div><div><h3>${t("contact")}</h3><p>${t("whatsapp")}: ${t("contactPending")}<br>Email: ${t("contactPending")}<br>${t("schedule")}</p></div></div></footer>
@@ -221,11 +263,113 @@ function render() {
 	bindEvents();
 }
 
+function showAccount() {
+	const modal = document.querySelector("#modal");
+	const accountContent = currentUser
+		? `<div class="account-content"><p>${escapeHtml(currentUser.email || "")}</p><p class="account-status" role="status">${escapeHtml(authMessage)}</p><button class="primary-button" type="button" data-sign-out>${t("signOut")}</button></div>`
+		: `<form class="auth-form" id="account-form"><label>${t("email")}<input name="email" type="email" autocomplete="email" required></label><label>${t("password")}<input name="password" type="password" autocomplete="${authMode === "signup" ? "new-password" : "current-password"}" minlength="6" required></label><p class="account-status" role="status" aria-live="polite">${escapeHtml(authMessage)}</p><button class="primary-button" type="submit">${t(authMode === "signup" ? "signUp" : "signIn")}</button><button class="text-link" type="button" data-auth-mode>${t(authMode === "signup" ? "switchToSignIn" : "switchToSignUp")}</button></form>`;
+	modal.innerHTML = `<section class="modal quote-modal account-modal"><button class="modal-close" type="button" data-close aria-label="${t("close")}">×</button><header class="quote-header"><span class="eyebrow">SAMA</span><h2>${t("accountTitle")}</h2>${currentUser ? "" : `<p>${t("favoritesIntro")}</p>`}</header>${accountContent}</section>`;
+	modal.classList.add("open");
+	modal.querySelector("[data-close]").addEventListener("click", () => modal.classList.remove("open"));
+	modal.addEventListener("click", event => { if (event.target === modal) modal.classList.remove("open"); }, { once: true });
+	modal.querySelector("[data-auth-mode]")?.addEventListener("click", () => {
+		authMode = authMode === "signup" ? "signin" : "signup";
+		authMessage = "";
+		showAccount();
+	});
+	modal.querySelector("[data-sign-out]")?.addEventListener("click", async () => {
+		const { error } = await window.supabaseClient.auth.signOut();
+		if (error) {
+			authMessage = t("authError", { message: error.message });
+			showAccount();
+		}
+	});
+	modal.querySelector("#account-form")?.addEventListener("submit", async event => {
+		event.preventDefault();
+		const form = event.currentTarget;
+		const email = form.elements.email.value.trim();
+		const password = form.elements.password.value;
+		const auth = window.supabaseClient?.auth;
+		if (!auth) {
+			authMessage = t("noConnection");
+			showAccount();
+			return;
+		}
+		const result = authMode === "signup"
+			? await auth.signUp({ email, password })
+			: await auth.signInWithPassword({ email, password });
+		if (result.error) {
+			authMessage = t("authError", { message: result.error.message });
+			showAccount();
+			return;
+		}
+		if (authMode === "signup" && !result.data.session) {
+			authMessage = t("signUpConfirmation");
+			showAccount();
+			return;
+		}
+		modal.classList.remove("open");
+	});
+}
+
+async function loadAccountFavorites(user) {
+	const guestFavorites = JSON.parse(localStorage.getItem("sama-favorites") || "[]");
+	if (!user) {
+		state.favorites = guestFavorites;
+		render();
+		return;
+	}
+	const { data, error } = await window.supabaseClient
+		.from("user_favorites")
+		.select("product_sku")
+		.eq("user_id", user.id);
+	if (error) {
+		state.favorites = guestFavorites;
+		authMessage = t("favoritesSyncError");
+		render();
+		return;
+	}
+	const accountFavorites = (data || []).map(row => row.product_sku);
+	const accountFavoriteSet = new Set(accountFavorites);
+	const guestOnlyFavorites = guestFavorites.filter(sku => !accountFavoriteSet.has(sku));
+	state.favorites = [...new Set([...accountFavorites, ...guestOnlyFavorites])];
+	authMessage = "";
+	render();
+	if (guestOnlyFavorites.length) {
+		const { error: syncError } = await window.supabaseClient
+			.from("user_favorites")
+			.upsert(guestOnlyFavorites.map(product_sku => ({ user_id: user.id, product_sku })), { onConflict: "user_id,product_sku" });
+		if (syncError) authMessage = t("favoritesSyncError");
+	}
+}
+
+async function updateAuthUser(user) {
+	if (user?.id === currentUser?.id) return;
+	currentUser = user;
+	authMessage = "";
+	await loadAccountFavorites(user);
+}
+
+async function initializeAuth() {
+	const auth = window.supabaseClient?.auth;
+	if (!auth) return;
+	auth.onAuthStateChange((event, session) => {
+		if (!["INITIAL_SESSION", "SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"].includes(event)) return;
+		window.setTimeout(() => { void updateAuthUser(session?.user || null); }, 0);
+	});
+	const { data, error } = await auth.getSession();
+	if (!error) await updateAuthUser(data.session?.user || null);
+}
+
 function categoryMenuItems() {
-	return categories.length ? categories : heroCategories.map((category, index) => ({ name: category.name, icon: categoryIcons[index % categoryIcons.length] }));
+	return categories;
 }
 function categoryMenuSubcategories(categoryName) {
-	return [...new Set(products.filter(product => product.category === categoryName).map(product => product.subcategory).filter(Boolean))].sort((left, right) => left.localeCompare(right, state.language));
+	return [...new Set(products
+		.filter(product => product.category.split(",").some(category => category.trim() === categoryName))
+		.map(product => product.subcategory)
+		.filter(Boolean))]
+		.sort((left, right) => left.localeCompare(right, state.language));
 }
 function categorySubmenuMarkup(category) {
 	if (!category) return `<p class="category-submenu-empty">${t("subcategoriesPending")}</p>`;
@@ -233,7 +377,7 @@ function categorySubmenuMarkup(category) {
 	const content = subcategories.length
 		? `<div class="category-submenu-grid">${subcategories.map(name => `<button type="button" class="category-submenu-item" data-subcategory="${escapeHtml(name)}" data-subcategory-parent="${escapeHtml(category.name)}">${escapeHtml(name)}<span aria-hidden="true">›</span></button>`).join("")}</div>`
 		: `<p class="category-submenu-empty">${t("subcategoriesPending")}</p>`;
-	return `<div class="category-submenu-heading"><span class="product-category">${t("subcategories")}</span><h2>${escapeHtml(category.name)}</h2></div>${content}<button type="button" class="category-submenu-all" data-category="${escapeHtml(category.name)}">${t("viewFullCategory")} →</button>`;
+	return `<div class="category-submenu-heading"><span class="product-category">${t("subcategories")}</span><h2>${escapeHtml(categoryLabel(category.name))}</h2></div>${content}<button type="button" class="category-submenu-all" data-category="${escapeHtml(category.name)}">${t("viewFullCategory")} →</button>`;
 }
 function categoryMenuMarkup() {
 	const menuItems = categoryMenuItems();
@@ -243,7 +387,7 @@ function categoryMenuMarkup() {
 		if (selectedCategory) {
 			activeMenuCategory = selectedCategory.name;
 		}
-	return `<div class="category-menu category-menu-search" role="group" aria-label="${t("categoryMenuLabel")}"><button class="category-menu-trigger" type="button" data-category-menu-toggle aria-expanded="${categoryMenuOpen}" aria-controls="category-menu-panel"><span class="category-menu-trigger-icon" aria-hidden="true">☰</span>${t("categories")}<span class="category-menu-chevron" aria-hidden="true">⌄</span></button><div class="category-menu-panel" id="category-menu-panel" ${categoryMenuOpen ? "" : "hidden"}><nav class="category-menu-list" aria-label="${t("categories")}"><button type="button" class="category-menu-all" data-category="Todos">${t("viewAll")}</button>${menuItems.map(category => `<button type="button" class="category-menu-item ${category.name === activeMenuCategory ? "active" : ""}" data-menu-category="${escapeHtml(category.name)}" aria-current="${category.name === activeMenuCategory ? "true" : "false"}"><span>${escapeHtml(category.icon || "▦")}</span>${escapeHtml(category.name)}<span class="category-menu-chevron" aria-hidden="true">›</span></button>`).join("")}</nav><section class="category-submenu" data-category-submenu aria-live="polite">${categorySubmenuMarkup(selectedCategory)}</section></div></div>`;
+	return `<div class="category-menu category-menu-search" role="group" aria-label="${t("categoryMenuLabel")}"><button class="category-menu-trigger" type="button" data-category-menu-toggle aria-expanded="${categoryMenuOpen}" aria-controls="category-menu-panel"><span class="category-menu-trigger-icon" aria-hidden="true">☰</span>${t("categories")}<span class="category-menu-chevron" aria-hidden="true">⌄</span></button><div class="category-menu-panel" id="category-menu-panel" ${categoryMenuOpen ? "" : "hidden"}><nav class="category-menu-list" aria-label="${t("categories")}"><button type="button" class="category-menu-all" data-category="Todos">${t("viewAll")}</button>${menuItems.map(category => `<button type="button" class="category-menu-item ${category.name === activeMenuCategory ? "active" : ""}" data-menu-category="${escapeHtml(category.name)}" aria-current="${category.name === activeMenuCategory ? "true" : "false"}"><span>${escapeHtml(category.icon || "▦")}</span>${escapeHtml(categoryLabel(category.name))}<span class="category-menu-chevron" aria-hidden="true">›</span></button>`).join("")}</nav><section class="category-submenu" data-category-submenu aria-live="polite">${categorySubmenuMarkup(selectedCategory)}</section></div></div>`;
 }
 function updateCategoryMenuDetails(categoryName) {
 	const category = categoryMenuItems().find(item => item.name === categoryName);
@@ -266,14 +410,18 @@ function closeCategoryMenu() {
 }
 
 function filteredProducts() {
-	const matches = products.filter(p => (state.category === "Todos" || p.category === state.category) && (!state.subcategory || p.subcategory === state.subcategory) && `${p.name} ${p.sku} ${p.description}`.toLowerCase().includes(state.query.toLowerCase()));
+	const matches = products.filter(p => (
+		state.category === "Todos"
+		|| p.category.split(",").some(category => category.trim() === state.category)
+	) && (!state.subcategory || p.subcategory === state.subcategory) && `${p.name} ${p.sku} ${p.description}`.toLowerCase().includes(state.query.toLowerCase()));
 	return state.category === "Todos" && !state.subcategory && !state.query ? matches.filter(product => product.isFeatured) : matches;
 }
 function heroCarouselMarkup() {
 	const autoplayLabel = heroAutoplayPaused ? t("resumeCarousel") : t("pauseCarousel");
-	return `<div class="hero-carousel" role="region" aria-roledescription="carousel" aria-label="${t("shopCategory")}"><div class="hero-carousel-slides" aria-live="off">${heroCategories.map((category, index) => `<article class="hero-slide" ${index === activeHeroSlide ? "" : "hidden"} aria-hidden="${index !== activeHeroSlide}" aria-label="${index + 1} / ${heroCategories.length}"><div class="hero-slide-caption"><span class="eyebrow">${t("categories")}</span><h2>${escapeHtml(category.name)}</h2></div></article>`).join("")}</div><div class="hero-carousel-controls"><button class="hero-arrow" type="button" data-hero-step="-1" aria-label="${t("previousCategory")}">‹</button><div class="hero-carousel-dots">${heroCategories.map((category, index) => `<button type="button" class="hero-dot ${index === activeHeroSlide ? "active" : ""}" data-hero-indicator="${index}" aria-label="${t("showCategorySlide")}: ${escapeHtml(category.name)}" aria-pressed="${index === activeHeroSlide}"></button>`).join("")}</div><span class="hero-carousel-count" data-hero-count>${activeHeroSlide + 1} / ${heroCategories.length}</span><button class="hero-autoplay-toggle" type="button" data-hero-toggle aria-label="${autoplayLabel}" title="${autoplayLabel}" aria-pressed="${heroAutoplayPaused}">${heroAutoplayPaused ? "▶" : "Ⅱ"}</button><button class="hero-arrow" type="button" data-hero-step="1" aria-label="${t("nextCategory")}">›</button></div></div>`;
+	return `<div class="hero-carousel" role="region" aria-roledescription="carousel" aria-label="${t("shopCategory")}"><div class="hero-carousel-slides" aria-live="off">${heroCategories.map((category, index) => `<article class="hero-slide" data-hero-tone="${category.tone}" ${index === activeHeroSlide ? "" : "hidden"} aria-hidden="${index !== activeHeroSlide}" aria-label="${index + 1} / ${heroCategories.length}"><div class="hero-slide-caption"><span class="eyebrow">${t("categories")}</span><h2>${escapeHtml(categoryLabel(category.name))}</h2></div></article>`).join("")}</div><div class="hero-carousel-controls"><button class="hero-arrow" type="button" data-hero-step="-1" aria-label="${t("previousCategory")}">‹</button><div class="hero-carousel-dots">${heroCategories.map((category, index) => `<button type="button" class="hero-dot ${index === activeHeroSlide ? "active" : ""}" data-hero-indicator="${index}" aria-label="${t("showCategorySlide")}: ${escapeHtml(categoryLabel(category.name))}" aria-pressed="${index === activeHeroSlide}"></button>`).join("")}</div><span class="hero-carousel-count" data-hero-count>${activeHeroSlide + 1} / ${heroCategories.length}</span><button class="hero-autoplay-toggle" type="button" data-hero-toggle aria-label="${autoplayLabel}" title="${autoplayLabel}" aria-pressed="${heroAutoplayPaused}">${heroAutoplayPaused ? "▶" : "Ⅱ"}</button><button class="hero-arrow" type="button" data-hero-step="1" aria-label="${t("nextCategory")}">›</button></div></div>`;
 }
 function setHeroSlide(index) {
+	if (!heroCategories.length) return;
 	activeHeroSlide = (index + heroCategories.length) % heroCategories.length;
 	document.querySelectorAll(".hero-slide").forEach((slide, slideIndex) => {
 		const isActive = slideIndex === activeHeroSlide;
@@ -315,7 +463,7 @@ function syncHeroAutoplay() {
 	pauseHeroAutoplay();
 	updateHeroAutoplayButton();
 	const carousel = document.querySelector(".hero-carousel");
-	if (!carousel || document.hidden || heroAutoplayPaused || reducedMotionPreference.matches || carousel.matches(":hover") || carousel.contains(document.activeElement)) return;
+	if (!carousel || !heroCategories.length || document.hidden || heroAutoplayPaused || reducedMotionPreference.matches || carousel.matches(":hover") || carousel.contains(document.activeElement)) return;
 	carousel.classList.remove("is-paused");
 	resetHeroProgress();
 	heroAutoplayTimer = window.setInterval(() => setHeroSlide(activeHeroSlide + 1), heroAutoplayDelay);
@@ -324,7 +472,7 @@ function catalogContent() {
 	if (state.loading || state.loadError || state.category !== "Todos" || state.subcategory || state.query) return `<div class="product-grid">${productCards()}</div>`;
 	const groups = categories.map(category => ({
 		category,
-		products: products.filter(product => product.category === category.name),
+		products: products.filter(product => product.category.split(",").some(categoryName => categoryName.trim() === category.name)),
 	})).filter(group => group.products.length);
 	if (!groups.length) return `<div class="product-grid">${productCards()}</div>`;
 	return `<div class="catalog-groups">${groups.map(group => {
@@ -346,7 +494,15 @@ function productCards(result = filteredProducts()) {
 }
 function save() {
 	localStorage.setItem("sama-cart", JSON.stringify(state.cart));
-	localStorage.setItem("sama-favorites", JSON.stringify(state.favorites));
+	if (!currentUser) localStorage.setItem("sama-favorites", JSON.stringify(state.favorites));
+}
+async function persistFavorite(sku, isFavorite) {
+	if (!currentUser) return true;
+	const favorites = window.supabaseClient.from("user_favorites");
+	const result = isFavorite
+		? await favorites.upsert({ user_id: currentUser.id, product_sku: sku }, { onConflict: "user_id,product_sku" })
+		: await favorites.delete().eq("user_id", currentUser.id).eq("product_sku", sku);
+	return !result.error;
 }
 function toast(message) {
 	const el = document.querySelector("#toast"); el.textContent = message; el.classList.add("show");
@@ -386,9 +542,17 @@ function addToCart(product, quantity = 1) {
 	if (item) item.quantity += quantity; else state.cart.push({ sku: product.sku, name: product.name, quantity });
 	save(); render(); toast(t("addedQuote", { name: product.name }));
 }
-function toggleFavorite(sku) {
-	state.favorites = state.favorites.includes(sku) ? state.favorites.filter(id => id !== sku) : [...state.favorites, sku];
-	save(); render(); toast(state.favorites.includes(sku) ? t("addedFavorite") : t("removedFavorite"));
+async function toggleFavorite(sku) {
+	const adding = !state.favorites.includes(sku);
+	state.favorites = adding ? [...state.favorites, sku] : state.favorites.filter(id => id !== sku);
+	save(); render();
+	if (currentUser && !(await persistFavorite(sku, adding))) {
+		state.favorites = adding ? state.favorites.filter(id => id !== sku) : [...state.favorites, sku];
+		render();
+		toast(t("favoritesSyncError"));
+		return;
+	}
+	toast(t(adding ? "addedFavorite" : "removedFavorite"));
 }
 function showFavorites() {
 	const favoriteProducts = products.filter(product => state.favorites.includes(product.sku));
@@ -410,9 +574,16 @@ function showFavorites() {
 		else state.cart.push({ sku: product.sku, name: product.name, quantity: 1 });
 		save(); render(); showFavorites(); toast(t("addedQuote", { name: product.name }));
 	}));
-	modal.querySelectorAll("[data-favorite-remove]").forEach(button => button.addEventListener("click", () => {
-		state.favorites = state.favorites.filter(sku => sku !== button.dataset.favoriteRemove);
-		save(); render(); showFavorites(); toast(t("removedFavorite"));
+	modal.querySelectorAll("[data-favorite-remove]").forEach(button => button.addEventListener("click", async () => {
+		const sku = button.dataset.favoriteRemove;
+		state.favorites = state.favorites.filter(favoriteSku => favoriteSku !== sku);
+		save(); render(); showFavorites();
+		if (currentUser && !(await persistFavorite(sku, false))) {
+			state.favorites = [...state.favorites, sku];
+			render(); showFavorites(); toast(t("favoritesSyncError"));
+			return;
+		}
+		toast(t("removedFavorite"));
 	}));
 	modal.querySelector("[data-favorite-add-all]")?.addEventListener("click", () => {
 		favoriteProducts.forEach(product => {
@@ -517,7 +688,22 @@ function bindEvents() {
 	document.querySelector("#language-toggle").addEventListener("click", () => { state.language = state.language === "es" ? "en" : "es"; render(); });
 	document.querySelector("[data-theme-toggle]").addEventListener("click", () => { manualTheme = true; applyTheme(state.theme === "dark" ? "light" : "dark"); render(); });
 	document.querySelector("#search-form").addEventListener("submit", e => { e.preventDefault(); state.query = document.querySelector("#search-input").value.trim(); categoryMenuOpen = false; render(); document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" }); });
-	document.querySelectorAll("[data-category]").forEach(el => el.addEventListener("click", () => { state.category = el.dataset.category; state.subcategory = ""; categoryMenuOpen = false; render(); document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" }); }));
+	document.querySelectorAll("[data-category]").forEach(el => {
+		const selectCategory = () => {
+			state.category = el.dataset.category;
+			state.subcategory = "";
+			categoryMenuOpen = false;
+			render();
+			document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" });
+		};
+		el.addEventListener("click", selectCategory);
+		if (el.matches("[role='button']")) el.addEventListener("keydown", event => {
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				selectCategory();
+			}
+		});
+	});
 	document.querySelectorAll("[data-scroll-products]").forEach(el => el.addEventListener("click", () => document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" })));
 	document.querySelectorAll("[data-product]").forEach(el => el.addEventListener("click", () => openModal(products.find(p => p.sku === el.dataset.product))));
 	document.querySelectorAll("[data-cart]").forEach(el => el.addEventListener("click", showCart));
@@ -525,7 +711,7 @@ function bindEvents() {
 	document.querySelectorAll("[data-reset]").forEach(el => el.addEventListener("click", () => { state.query = ""; state.category = "Todos"; state.subcategory = ""; categoryMenuOpen = false; render(); }));
 	document.querySelectorAll("[data-retry]").forEach(el => el.addEventListener("click", loadProducts));
 	document.querySelector("[data-home]").addEventListener("click", e => { e.preventDefault(); state.query = ""; state.category = "Todos"; state.subcategory = ""; categoryMenuOpen = false; render(); window.scrollTo({ top: 0, behavior: "smooth" }); });
-	document.querySelector("[data-account]").addEventListener("click", () => toast(t("noAccount")));
+	document.querySelectorAll("[data-account]").forEach(button => button.addEventListener("click", showAccount));
 }
 
 document.addEventListener("visibilitychange", syncHeroAutoplay);
@@ -541,3 +727,4 @@ document.addEventListener("keydown", event => {
 });
 render();
 loadProducts();
+initializeAuth();
