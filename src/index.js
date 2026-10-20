@@ -1,4 +1,4 @@
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
 
 const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
