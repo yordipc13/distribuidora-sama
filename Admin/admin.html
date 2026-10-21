@@ -92,7 +92,16 @@
               </select>
             </label>
             <input id="excel-import-input" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,application/vnd.ms-excel.sheet.binary.macroEnabled.12,application/vnd.ms-excel.sheet.macroEnabled.12" hidden />
+            <button class="button button-danger" id="delete-menu-button" type="button" aria-expanded="false" aria-controls="delete-menu" data-i18n="delete">Borrar</button>
+            <div class="delete-menu" id="delete-menu" hidden>
+              <button type="button" data-delete-action="selected" data-i18n="deleteSelected">Borrar seleccionados</button>
+              <button type="button" data-delete-action="category" data-i18n="deleteCategory">Borrar categoría actual</button>
+              <button type="button" data-delete-action="descriptions" data-i18n="deleteDescriptions">Borrar todas las descripciones</button>
+              <button type="button" data-delete-action="all" data-i18n="deleteAll">Borrar todos los productos</button>
+            </div>
+            <button class="button" id="add-product" type="button" data-i18n="addProduct">Agregar</button>
             <button class="button" id="import-excel" type="button" data-i18n="importExcel">Importar Excel</button>
+            <button class="button" id="generate-descriptions" type="button" data-i18n="generateDescriptions">Generar descripciones</button>
           </div>
           <p class="import-status" id="import-status" role="status" aria-live="polite"></p>
 
@@ -163,6 +172,42 @@
           </div>
         </section>
       </main>
+      <dialog class="admin-dialog" id="product-dialog">
+        <form id="product-form" method="dialog">
+          <h2 id="product-dialog-title">Producto</h2>
+          <label>SKU<input name="sku" required /></label>
+          <label>Producto<input name="producto" required /></label>
+          <label>Categoría<input name="categoria" /></label>
+          <label>Subcategoría<input name="subcategoria" /></label>
+          <label>Descripción<textarea name="descripcion" rows="4"></textarea></label>
+          <label>Imagen URL<input name="imagen_url" type="url" /></label>
+          <label>Existencias<input name="stock" type="number" min="0" step="1" /></label>
+          <p class="dialog-error" id="product-dialog-error" role="alert"></p>
+          <div class="dialog-actions">
+            <button class="button button-secondary" id="cancel-product" type="button" data-i18n="cancel">Cancelar</button>
+            <button class="button" type="submit" data-i18n="save">Guardar</button>
+          </div>
+        </form>
+      </dialog>
+      <dialog class="admin-dialog category-dialog" id="category-delete-dialog">
+        <form id="category-delete-form" method="dialog">
+          <h2 data-i18n="deleteCategoryTitle">Borrar categoría</h2>
+          <p data-i18n="deleteCategoryDescription">Selecciona la categoría cuyos productos deseas borrar.</p>
+          <label for="delete-category-select" data-i18n="category">Categoría</label>
+          <select id="delete-category-select" required>
+            <option value="" data-i18n="selectCategory">Selecciona una categoría</option>
+          </select>
+          <p class="dialog-error" id="category-delete-error" role="alert"></p>
+          <div class="dialog-actions">
+            <button class="button button-secondary" id="cancel-category-delete" type="button" data-i18n="cancel">Cancelar</button>
+            <button class="button button-danger" id="confirm-category-delete" type="submit" disabled data-i18n="delete">Borrar</button>
+          </div>
+        </form>
+      </dialog>
+      <div class="context-menu" id="product-context-menu" hidden>
+        <button type="button" data-context-action="edit" data-i18n="edit">Editar</button>
+        <button type="button" data-context-action="delete" data-i18n="deleteOne">Borrar producto</button>
+      </div>
     </div>
   </body>
 </html>

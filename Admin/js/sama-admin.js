@@ -14,8 +14,24 @@ const filterHint = document.querySelector("#filter-hint");
 const languageSelect = document.querySelector("#admin-language");
 const themeToggle = document.querySelector("#theme-toggle");
 const importButton = document.querySelector("#import-excel");
+const generateDescriptionsButton = document.querySelector("#generate-descriptions");
 const importInput = document.querySelector("#excel-import-input");
 const importStatus = document.querySelector("#import-status");
+const addProductButton = document.querySelector("#add-product");
+const deleteMenuButton = document.querySelector("#delete-menu-button");
+const deleteMenu = document.querySelector("#delete-menu");
+const productDialog = document.querySelector("#product-dialog");
+const productForm = document.querySelector("#product-form");
+const productDialogTitle = document.querySelector("#product-dialog-title");
+const productDialogError = document.querySelector("#product-dialog-error");
+const cancelProductButton = document.querySelector("#cancel-product");
+const productContextMenu = document.querySelector("#product-context-menu");
+const categoryDeleteDialog = document.querySelector("#category-delete-dialog");
+const categoryDeleteForm = document.querySelector("#category-delete-form");
+const deleteCategorySelect = document.querySelector("#delete-category-select");
+const categoryDeleteError = document.querySelector("#category-delete-error");
+const cancelCategoryDeleteButton = document.querySelector("#cancel-category-delete");
+const confirmCategoryDeleteButton = document.querySelector("#confirm-category-delete");
 const authPanel = document.querySelector("#auth-panel");
 const workspace = document.querySelector(".workspace");
 const signInForm = document.querySelector("#sign-in-form");
@@ -44,33 +60,35 @@ let individualTimerStartedAt = 0;
 let individualTimerStoppedAt = 0;
 let totalTimerInterval = null;
 let statistics = { total: 0, completed: 0, failures: 0, rows: [] };
+const selectedProductSkus = new Set();
+let editingProductSku = null;
 
 const translations = {
   es: {
     title: "Administración de catálogo | SAMA", refresh: "Actualizar", backToCatalog: "Volver al catálogo",
     catalog: "CATÁLOGO", catalogAria: "Catálogo de SAMA", adminTitle: "Administración SAMA", adminDescription: "Consulta productos, categorías y marcas activas.",
-    readOnly: "Consulta e importación", importExcel: "Importar Excel", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", sequence: "#", individualTime: "Tiempo individual", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
+    readOnly: "Consulta e importación", importExcel: "Importar Excel", generateDescriptions: "Generar descripciones", addProduct: "Agregar", delete: "Borrar", deleteSelected: "Borrar seleccionados", deleteCategory: "Borrar categoría actual", deleteCategoryTitle: "Borrar categoría", deleteCategoryDescription: "Selecciona la categoría cuyos productos deseas borrar.", selectCategory: "Selecciona una categoría", deleteDescriptions: "Borrar todas las descripciones", deleteAll: "Borrar todos los productos", deleteOne: "Borrar producto", edit: "Editar", save: "Guardar", cancel: "Cancelar", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", sequence: "#", individualTime: "Tiempo individual", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
     footerTitle: "SAMA · Catálogo", footerData: "Datos activos de Supabase", searchPlaceholder: "Buscar en el catálogo...",
     results: "registros", result: "registro",     loading: "Conectando a Supabase...", connected: "Conectado a Supabase", generatingDescriptions: "Generando descripciones:",
     clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}", authError: "No se pudo iniciar sesión: {message}", notAdmin: "La cuenta no tiene permisos de administrador.",
     noMatches: "No encontramos registros", noProducts: "Aún no hay productos", noCategories: "Aún no hay categorías", noBrands: "Aún no hay marcas",
     noActiveRecords: "No hay registros activos cargados en Supabase.", searchHint: "Prueba con otro término de búsqueda.",
-    filterHint: "Pulsa un encabezado para añadir un filtro. Vuelve a pulsarlo para quitarlo.",
-    filterColumn: "Filtrar por {column}", removeFilter: "Quitar filtro de {column}", columnPlaceholder: "Filtrar...",
+    filterHint: "Selecciona uno o varios encabezados y escribe en la barra de búsqueda. Sin selección, busca en todas las columnas.",
+    filterColumn: "Buscar en {column}", removeFilter: "Dejar de buscar en {column}",
     sku: "SKU", product: "Producto", category: "Categoría", brand: "Marca", subcategory: "Subcategoría", description: "Descripción", image: "Imagen", stock: "Existencias", featured: "Destacado", slug: "Identificador",
     yes: "Sí", no: "No", switchToDark: "Activar modo oscuro", switchToLight: "Activar modo claro", language: "Idioma",
   },
   en: {
     title: "Catalog administration | SAMA", refresh: "Refresh", backToCatalog: "Back to catalog",
     catalog: "CATALOG", catalogAria: "SAMA catalog", adminTitle: "SAMA administration", adminDescription: "View active products, categories, and brands.",
-    readOnly: "View and import", importExcel: "Import Excel", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", sequence: "#", individualTime: "Individual time", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
+    readOnly: "View and import", importExcel: "Import Excel", generateDescriptions: "Generate descriptions", addProduct: "Add", delete: "Delete", deleteSelected: "Delete selected", deleteCategory: "Delete current category", deleteCategoryTitle: "Delete category", deleteCategoryDescription: "Select the category whose products you want to delete.", selectCategory: "Select a category", deleteDescriptions: "Delete all descriptions", deleteAll: "Delete all products", deleteOne: "Delete product", edit: "Edit", save: "Save", cancel: "Cancel", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", sequence: "#", individualTime: "Individual time", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
     footerTitle: "SAMA · Catalog", footerData: "Active Supabase data", searchPlaceholder: "Search the catalog...",
     results: "records", result: "record",     loading: "Connecting to Supabase...", connected: "Connected to Supabase", generatingDescriptions: "Generating descriptions:",
     clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}", authError: "Could not sign in: {message}", notAdmin: "This account does not have administrator permissions.",
     noMatches: "No records found", noProducts: "No products yet", noCategories: "No categories yet", noBrands: "No brands yet",
     noActiveRecords: "There are no active records in Supabase.", searchHint: "Try a different search term.",
-    filterHint: "Click a column heading to add a filter. Click it again to remove it.",
-    filterColumn: "Filter by {column}", removeFilter: "Remove {column} filter", columnPlaceholder: "Filter...",
+    filterHint: "Select one or more headings and type in the search bar. With none selected, search all columns.",
+    filterColumn: "Search in {column}", removeFilter: "Stop searching in {column}",
     sku: "SKU", product: "Product", category: "Category", brand: "Brand", subcategory: "Subcategory", description: "Description", image: "Image", stock: "Stock", featured: "Featured", slug: "Identifier",
     yes: "Yes", no: "No", switchToDark: "Switch to dark mode", switchToLight: "Switch to light mode", language: "Language",
   },
@@ -145,6 +163,7 @@ const views = {
     columns: [
       ["Sku", "sku"],
       ["Producto", "product"],
+      ["slug", "slug"],
       ["Categoria", "category"],
       ["Subcategoria", "subcategory"],
       ["descripcion", "description"],
@@ -180,7 +199,7 @@ for (const [viewKey, categoryNames] of Object.entries(productCategoryViews)) {
 }
 
 let records = [];
-const columnFilters = new Map();
+const selectedSearchFields = new Set();
 
 function normalizeHeader(value) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -189,6 +208,71 @@ function normalizeHeader(value) {
 function excelValue(row, names) {
   const entry = Object.entries(row).find(([key]) => names.includes(normalizeHeader(key)));
   return entry ? entry[1] : "";
+}
+
+const slugStopWords = new Set([
+  "a", "al", "con", "de", "del", "e", "el", "en", "la", "las",
+  "los", "para", "por", "un", "una", "y",
+]);
+
+function slugifyText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join("-");
+}
+
+function createProductSlug(productName, sku = "") {
+  const words = String(productName ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter(word => word && !slugStopWords.has(word))
+    .slice(0, 5);
+  const base = words.join("-");
+  return base || `producto-${slugifyText(sku) || "sin-sku"}`;
+}
+
+function reserveUniqueSlug(baseSlug, sku, takenSlugs) {
+  const normalizedSku = String(sku ?? "").trim();
+  let candidate = baseSlug;
+  if (!takenSlugs.has(candidate)) {
+    takenSlugs.set(candidate, normalizedSku);
+    return candidate;
+  }
+  if (takenSlugs.get(candidate) === normalizedSku) return candidate;
+
+  const skuSuffix = slugifyText(normalizedSku);
+  candidate = skuSuffix ? `${baseSlug}-${skuSuffix}` : `${baseSlug}-2`;
+  let suffix = 2;
+  while (takenSlugs.has(candidate) && takenSlugs.get(candidate) !== normalizedSku) {
+    suffix += 1;
+    candidate = `${baseSlug}-${suffix}`;
+  }
+  takenSlugs.set(candidate, normalizedSku);
+  return candidate;
+}
+
+async function loadProductSlugs() {
+  const { data, error } = await client.from("products").select("Sku,slug,descripcion");
+  if (error) throw error;
+  const bySku = new Map();
+  const descriptionsBySku = new Map();
+  const takenSlugs = new Map();
+  for (const record of data || []) {
+    const sku = String(record.Sku ?? "").trim();
+    const slug = String(record.slug ?? "").trim();
+    if (sku) bySku.set(sku, slug);
+    if (sku) descriptionsBySku.set(sku, record.descripcion ?? null);
+    if (slug) takenSlugs.set(slug, sku);
+  }
+  return { bySku, descriptionsBySku, takenSlugs };
 }
 
 function toStock(value) {
@@ -287,68 +371,115 @@ async function importExcelFile(file) {
   if (!rows.length) throw new Error("La primera hoja no contiene productos.");
 
   const products = rows.map(toProductRow);
+  const { bySku, descriptionsBySku, takenSlugs } = await loadProductSlugs();
   let savedCount = 0;
+  for (const product of products) {
+    const existingSlug = bySku.get(product.sku);
+    const slug = existingSlug || reserveUniqueSlug(
+      createProductSlug(product.producto, product.sku),
+      product.sku,
+      takenSlugs,
+    );
+    const payload = {
+      Sku: product.sku,
+      Producto: product.producto,
+      slug,
+      Categoria: product.categoria || null,
+      Subcategoria: product.subcategoria || null,
+      descripcion: String(product.descripcion ?? "").trim()
+        ? product.descripcion
+        : (descriptionsBySku.get(product.sku) ?? null),
+      "Image(url)": product.imagen_url || null,
+      stock: product.stock,
+      is_active: true,
+    };
+    const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
+    if (error) throw error;
+    bySku.set(product.sku, slug);
+    descriptionsBySku.set(product.sku, payload.descripcion);
+    savedCount += 1;
+    importStatus.textContent = `Guardados ${savedCount}/${products.length} (${product.sku})`;
+  }
+  return { count: savedCount };
+}
+
+function databaseProductToDescriptionProduct(record) {
+  return {
+    sku: record.Sku,
+    producto: record.Producto,
+    categoria: record.Categoria || "",
+    subcategoria: record.Subcategoria || "",
+    descripcion: record.descripcion,
+    stock: record.stock,
+    imagen_url: record["Image(url)"] || "",
+  };
+}
+
+async function generateMissingDescriptions() {
+  const { data, error } = await client.from("products").select("*").eq("is_active", true).order("Producto");
+  if (error) throw error;
+  const products = (data || [])
+    .map(databaseProductToDescriptionProduct)
+    .filter(product => window.SamaProductDescriptions.isEmptyDescription(product.descripcion));
+  if (!products.length) {
+    importStatus.textContent = "No hay productos con descripción vacía.";
+    return { count: 0, failures: 0 };
+  }
+
   const startedProducts = new Map();
   const descriptionDurations = new Map();
   resetStatistics(products.length);
+  let savedCount = 0;
   try {
     await window.SamaProductDescriptions.prepareProductsForSync(products, {
-    delayMs: 4500,
-    onProgress: progress => {
-      importStatus.textContent = `${t("generatingDescriptions")} ${progress.completed}/${progress.total} (${progress.sku})`;
-    },
-    onPrepared: async (product, progress) => {
-      const payload = {
-        Sku: product.sku,
-        Producto: product.producto,
-        Categoria: product.categoria || null,
-        Subcategoria: product.subcategoria || null,
-        descripcion: product.descripcion || null,
-        "Image(url)": product.imagen_url || null,
-        stock: product.stock,
-        is_active: true,
-      };
-      const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
-      if (error) throw error;
-      const startedAt = startedProducts.get(product.sku) || performance.now();
-      const descriptionDuration = descriptionDurations.get(product.sku) || (performance.now() - startedAt);
-      individualTimerState.textContent = `${t("finished")} (${product.sku})`;
-      savedCount += 1;
-      statistics.completed += 1;
-      statistics.rows.push({ sku: product.sku, producto: product.producto, duration: descriptionDuration, success: true });
-      renderStatistics();
-      importStatus.textContent = `Guardados ${savedCount}/${progress.total} (${product.sku})`;
-    },
-    onProductStart: product => {
-      startedProducts.set(product.sku, performance.now());
-      individualTimerStartedAt = startedProducts.get(product.sku);
-      individualTimerStoppedAt = 0;
-      individualTimerState.textContent = `${t("running")} (${product.sku})`;
-      renderStatistics();
-    },
-    onDescriptionReady: product => {
-      const duration = performance.now() - (startedProducts.get(product.sku) || performance.now());
-      descriptionDurations.set(product.sku, duration);
-      individualTimerStoppedAt = performance.now();
-      individualTimerState.textContent = `${t("finished")} (${product.sku})`;
-      renderStatistics();
-    },
-    onError: (product, error) => {
-      individualTimerStoppedAt = performance.now();
-      statistics.completed += 1;
-      statistics.failures += 1;
-      statistics.rows.push({
-        sku: product.sku,
-        producto: product.producto,
-        duration: descriptionDurations.get(product.sku)
-          || (performance.now() - (startedProducts.get(product.sku) || performance.now())),
-        success: false,
-        error: error.message || "Error desconocido",
-      });
-      individualTimerState.textContent = `${t("finished")} (${product.sku})`;
-      renderStatistics();
-      importStatus.textContent = `Se omitió ${product.sku}: ${error.message || "Error desconocido"}`;
-    },
+      delayMs: 4500,
+      onProgress: progress => {
+        importStatus.textContent = `${t("generatingDescriptions")} ${progress.completed}/${progress.total} (${progress.sku})`;
+      },
+      onPrepared: async (product, progress) => {
+        const { error: upsertError } = await client.from("products")
+          .update({ descripcion: product.descripcion })
+          .eq("Sku", product.sku);
+        if (upsertError) throw upsertError;
+        savedCount += 1;
+        statistics.completed += 1;
+        statistics.rows.push({
+          sku: product.sku,
+          producto: product.producto,
+          duration: descriptionDurations.get(product.sku) || 0,
+          success: true,
+        });
+        renderStatistics();
+        importStatus.textContent = `Guardadas ${savedCount}/${progress.total} (${product.sku})`;
+      },
+      onProductStart: product => {
+        startedProducts.set(product.sku, performance.now());
+        individualTimerStartedAt = startedProducts.get(product.sku);
+        individualTimerStoppedAt = 0;
+        individualTimerState.textContent = `${t("running")} (${product.sku})`;
+        renderStatistics();
+      },
+      onDescriptionReady: product => {
+        const duration = performance.now() - (startedProducts.get(product.sku) || performance.now());
+        descriptionDurations.set(product.sku, duration);
+        individualTimerStoppedAt = performance.now();
+        individualTimerState.textContent = `${t("finished")} (${product.sku})`;
+        renderStatistics();
+      },
+      onError: (product, generationError) => {
+        individualTimerStoppedAt = performance.now();
+        statistics.completed += 1;
+        statistics.failures += 1;
+        statistics.rows.push({
+          sku: product.sku,
+          producto: product.producto,
+          duration: performance.now() - (startedProducts.get(product.sku) || performance.now()),
+          success: false,
+          error: generationError.message || "Error desconocido",
+        });
+        renderStatistics();
+        importStatus.textContent = `Se omitió ${product.sku}: ${generationError.message || "Error desconocido"}`;
+      },
     });
     return { count: savedCount, failures: statistics.failures };
   } finally {
@@ -399,15 +530,14 @@ function addDiscoveredCategoryViews() {
 function render() {
   const view = views[viewSelect.value];
   const query = searchInput.value.trim().toLocaleLowerCase("es");
-  const activeColumnFilters = [...columnFilters].filter(([, value]) => value.trim());
+  const searchFields = selectedSearchFields.size
+    ? view.columns.filter(([field]) => selectedSearchFields.has(field)).map(([field]) => field)
+    : view.columns.map(([field]) => field);
   const filtered = records.filter(record => {
-    const globalMatch = !query || view.columns.some(([field]) =>
+    const globalMatch = !query || searchFields.some(field =>
       valueFor(record, field).toLocaleLowerCase("es").includes(query),
     );
-    const columnMatch = activeColumnFilters.every(([field, value]) =>
-      valueFor(record, field).toLocaleLowerCase("es").includes(value.trim().toLocaleLowerCase("es")),
-    );
-    return globalMatch && columnMatch;
+    return globalMatch;
   });
 
   viewLabel.textContent = view.label || t(view.labelKey);
@@ -422,48 +552,40 @@ function render() {
     header.scope = "col";
     const label = t(labelKey);
     const toggle = document.createElement("button");
-    const hasFilter = columnFilters.has(field);
+    const isSelected = selectedSearchFields.has(field);
     toggle.type = "button";
-    toggle.className = `column-filter-toggle${hasFilter ? " is-active" : ""}`;
+    toggle.className = `column-filter-toggle${isSelected ? " is-active" : ""}`;
     toggle.textContent = label;
-    toggle.setAttribute("aria-pressed", String(hasFilter));
-    toggle.setAttribute("aria-label", t(hasFilter ? "removeFilter" : "filterColumn", { column: label }));
+    toggle.setAttribute("aria-pressed", String(isSelected));
+    toggle.setAttribute("aria-label", t(isSelected ? "removeFilter" : "filterColumn", { column: label }));
     toggle.addEventListener("click", () => {
-      if (columnFilters.has(field)) {
-        columnFilters.delete(field);
-        render();
-        return;
-      }
-      columnFilters.set(field, "");
+      if (selectedSearchFields.has(field)) selectedSearchFields.delete(field);
+      else selectedSearchFields.add(field);
       render();
-      tableHead.querySelector(`[data-column-filter="${field}"]`)?.focus();
     });
     header.append(toggle);
-
-    if (hasFilter) {
-      const input = document.createElement("input");
-      input.type = "search";
-      input.className = "column-filter-input";
-      input.placeholder = t("columnPlaceholder");
-      input.value = columnFilters.get(field);
-      input.dataset.columnFilter = field;
-      input.setAttribute("aria-label", t("filterColumn", { column: label }));
-      input.addEventListener("input", event => {
-        const { selectionStart, selectionEnd } = event.currentTarget;
-        columnFilters.set(field, event.currentTarget.value);
-        render();
-        const nextInput = tableHead.querySelector(`[data-column-filter="${field}"]`);
-        nextInput?.focus();
-        nextInput?.setSelectionRange(selectionStart, selectionEnd);
-      });
-      header.append(input);
-    }
     headerRow.append(header);
   }
   tableHead.append(headerRow);
 
   for (const record of filtered) {
     const row = document.createElement("tr");
+    row.dataset.sku = record.Sku;
+    row.classList.toggle("is-selected", selectedProductSkus.has(record.Sku));
+    row.addEventListener("click", () => {
+      if (selectedProductSkus.has(record.Sku)) selectedProductSkus.delete(record.Sku);
+      else selectedProductSkus.add(record.Sku);
+      render();
+    });
+    row.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      selectedProductSkus.add(record.Sku);
+      render();
+      productContextMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 180)}px`;
+      productContextMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 90)}px`;
+      productContextMenu.hidden = false;
+      productContextMenu.dataset.sku = record.Sku;
+    });
     for (const [field] of view.columns) {
       const cell = document.createElement("td");
       cell.textContent = valueFor(record, field);
@@ -475,6 +597,98 @@ function render() {
   emptyState.hidden = filtered.length > 0;
   emptyTitle.textContent = query ? t("noMatches") : t(view.emptyTitleKey || `no${view.labelKey[0].toUpperCase()}${view.labelKey.slice(1)}`);
   emptyMessage.textContent = query ? t("searchHint") : t("noActiveRecords");
+}
+
+function openProductDialog(record = null) {
+  editingProductSku = record?.Sku || null;
+  productDialogTitle.textContent = record ? t("edit") : t("addProduct");
+  productDialogError.textContent = "";
+  for (const field of ["sku", "producto", "categoria", "subcategoria", "descripcion", "imagen_url", "stock"]) {
+    productForm.elements[field].value = record
+      ? (field === "sku" ? record.Sku : field === "imagen_url" ? record["Image(url)"] || "" : record[field === "producto" ? "Producto" : field === "categoria" ? "Categoria" : field === "subcategoria" ? "Subcategoria" : field] ?? "")
+      : "";
+  }
+  productForm.elements.sku.disabled = Boolean(record);
+  productDialog.showModal();
+}
+
+async function deleteProducts(skus) {
+  if (!skus.length) throw new Error("Selecciona al menos un producto.");
+  const { error } = await client.from("products").delete().in("Sku", skus);
+  if (error) throw error;
+  skus.forEach(sku => selectedProductSkus.delete(sku));
+}
+
+async function availableCategories() {
+  const { data, error } = await client.from("products").select("Categoria");
+  if (error) throw error;
+  return [...new Set((data || []).flatMap(record => String(record.Categoria || "")
+    .split(",")
+    .map(category => category.trim())
+    .filter(Boolean)))].sort((a, b) => a.localeCompare(b, "es"));
+}
+
+async function openCategoryDeleteDialog() {
+  categoryDeleteError.textContent = "";
+  deleteCategorySelect.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = t("selectCategory");
+  deleteCategorySelect.append(placeholder);
+  for (const category of await availableCategories()) {
+    const option = document.createElement("option");
+    option.value = category;
+    option.textContent = category;
+    deleteCategorySelect.append(option);
+  }
+  confirmCategoryDeleteButton.disabled = true;
+  categoryDeleteDialog.showModal();
+}
+
+async function deleteCategoryProducts(category) {
+  const { data, error: selectError } = await client.from("products").select("Sku,Categoria");
+  if (selectError) throw selectError;
+  const normalizedCategory = category.toLocaleLowerCase("es");
+  const skus = (data || [])
+    .filter(record => String(record.Categoria || "").split(",")
+      .map(value => value.trim().toLocaleLowerCase("es"))
+      .includes(normalizedCategory))
+    .map(record => record.Sku)
+    .filter(Boolean);
+  if (!skus.length) throw new Error("No se encontraron productos para esa categoría.");
+  const { error: deleteError } = await client.from("products").delete().in("Sku", skus);
+  if (deleteError) throw deleteError;
+  skus.forEach(sku => selectedProductSkus.delete(sku));
+  await loadView();
+}
+
+async function executeDeleteAction(action) {
+  let skus = [];
+  if (action === "selected") skus = [...selectedProductSkus];
+  if (action === "category") {
+    await openCategoryDeleteDialog();
+    return;
+  }
+  if (action === "all") {
+    if (!window.confirm("¿Borrar absolutamente todos los productos? Esta acción no se puede deshacer.")) return;
+    const { error } = await client.from("products").delete().not("Sku", "is", null);
+    if (error) throw error;
+    selectedProductSkus.clear();
+    await loadView();
+    return;
+  }
+  if (action === "descriptions") {
+    const confirmed = window.confirm("¿Borrar todas las descripciones de todos los productos? Esta acción no se puede deshacer.");
+    if (!confirmed) return;
+    const { error } = await client.from("products").update({ descripcion: null }).not("Sku", "is", null);
+    if (error) throw error;
+    await loadView();
+    return;
+  }
+  if (!skus.length) throw new Error("No hay productos para borrar en esta vista.");
+  if (!window.confirm(`¿Borrar ${skus.length} producto(s)? Esta acción no se puede deshacer.`)) return;
+  await deleteProducts(skus);
+  await loadView();
 }
 
 async function loadView() {
@@ -523,12 +737,105 @@ systemTheme.addEventListener("change", event => {
 applyLanguage();
 applyTheme(document.documentElement.dataset.theme || (systemTheme.matches ? "dark" : "light"));
 viewSelect.addEventListener("change", () => {
-  columnFilters.clear();
+  selectedSearchFields.clear();
   loadView();
 });
 searchInput.addEventListener("input", render);
 refreshButton.addEventListener("click", loadView);
 importButton.addEventListener("click", () => importInput.click());
+addProductButton.addEventListener("click", () => openProductDialog());
+cancelProductButton.addEventListener("click", () => productDialog.close());
+deleteMenuButton.addEventListener("click", () => {
+  deleteMenu.hidden = !deleteMenu.hidden;
+  deleteMenuButton.setAttribute("aria-expanded", String(!deleteMenu.hidden));
+});
+deleteCategorySelect.addEventListener("change", () => {
+  confirmCategoryDeleteButton.disabled = !deleteCategorySelect.value;
+});
+cancelCategoryDeleteButton.addEventListener("click", () => categoryDeleteDialog.close());
+categoryDeleteForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const category = deleteCategorySelect.value;
+  if (!category) return;
+  confirmCategoryDeleteButton.disabled = true;
+  categoryDeleteError.textContent = "";
+  try {
+    await deleteCategoryProducts(category);
+    categoryDeleteDialog.close();
+    importStatus.textContent = `Categoría "${category}" borrada correctamente.`;
+  } catch (error) {
+    categoryDeleteError.textContent = error.message || "No se pudo borrar la categoría.";
+    confirmCategoryDeleteButton.disabled = false;
+  }
+});
+document.querySelectorAll("[data-delete-action]").forEach(button => {
+  button.addEventListener("click", async () => {
+    deleteMenu.hidden = true;
+    deleteMenuButton.setAttribute("aria-expanded", "false");
+    try {
+      await executeDeleteAction(button.dataset.deleteAction);
+    } catch (error) {
+      importStatus.textContent = `Error: ${error.message || "No se pudo completar el borrado."}`;
+    }
+  });
+});
+document.querySelectorAll("[data-context-action]").forEach(button => {
+  button.addEventListener("click", async () => {
+    const sku = productContextMenu.dataset.sku;
+    const record = records.find(item => item.Sku === sku);
+    productContextMenu.hidden = true;
+    if (!record) return;
+    if (button.dataset.contextAction === "edit") {
+      openProductDialog(record);
+      return;
+    }
+    try {
+      if (!window.confirm(`¿Borrar el producto ${sku}? Esta acción no se puede deshacer.`)) return;
+      await deleteProducts([sku]);
+      await loadView();
+    } catch (error) {
+      importStatus.textContent = `Error: ${error.message || "No se pudo borrar el producto."}`;
+    }
+  });
+});
+document.addEventListener("click", event => {
+  if (!deleteMenu.contains(event.target) && event.target !== deleteMenuButton) {
+    deleteMenu.hidden = true;
+    deleteMenuButton.setAttribute("aria-expanded", "false");
+  }
+  if (!productContextMenu.contains(event.target)) productContextMenu.hidden = true;
+});
+productForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  productDialogError.textContent = "";
+  const formData = new FormData(productForm);
+  const stockValue = formData.get("stock");
+  const sku = String(formData.get("sku") || "").trim();
+  const productName = String(formData.get("producto") || "").trim();
+  const payload = {
+    Sku: sku,
+    Producto: productName,
+    Categoria: String(formData.get("categoria") || "").trim() || null,
+    Subcategoria: String(formData.get("subcategoria") || "").trim() || null,
+    descripcion: String(formData.get("descripcion") || "").trim() || null,
+    "Image(url)": String(formData.get("imagen_url") || "").trim() || null,
+    stock: stockValue === "" ? null : Number(stockValue),
+    is_active: true,
+  };
+  try {
+    if (!payload.Sku || !payload.Producto) throw new Error("SKU y Producto son obligatorios.");
+    if (payload.stock !== null && (!Number.isInteger(payload.stock) || payload.stock < 0)) throw new Error("Las existencias deben ser un entero no negativo.");
+    const { bySku, takenSlugs } = await loadProductSlugs();
+    const existingSlug = bySku.get(sku);
+    payload.slug = existingSlug || reserveUniqueSlug(createProductSlug(productName, sku), sku, takenSlugs);
+    const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
+    if (error) throw error;
+    productDialog.close();
+    await loadView();
+  } catch (error) {
+    productDialogError.textContent = error.message || "No se pudo guardar el producto.";
+  }
+});
 menuToggle.addEventListener("click", () => {
   const isOpen = adminNavigation.hidden;
   adminNavigation.hidden = !isOpen;
@@ -552,6 +859,7 @@ importInput.addEventListener("change", async event => {
   if (!file) return;
 
   importButton.disabled = true;
+  generateDescriptionsButton.disabled = true;
   importStatus.textContent = `${t("loading")} ${file.name}`;
   try {
     const result = await importExcelFile(file);
@@ -561,6 +869,25 @@ importInput.addEventListener("change", async event => {
     importStatus.textContent = `Error de importación: ${error.message || "Error desconocido."}`;
   } finally {
     importButton.disabled = false;
+    generateDescriptionsButton.disabled = false;
+  }
+});
+generateDescriptionsButton.addEventListener("click", async () => {
+  importButton.disabled = true;
+  generateDescriptionsButton.disabled = true;
+  importStatus.textContent = "Buscando productos sin descripción...";
+  try {
+    const result = await generateMissingDescriptions();
+    importStatus.textContent = result.failures
+      ? `${result.count} descripciones generadas; ${result.failures} con error.`
+      : `${result.count} descripciones generadas.`;
+    await loadView();
+  } catch (error) {
+    finishStatistics();
+    importStatus.textContent = `Error de generación: ${error.message || "Error desconocido."}`;
+  } finally {
+    importButton.disabled = false;
+    generateDescriptionsButton.disabled = false;
   }
 });
 signInForm.addEventListener("submit", async event => {

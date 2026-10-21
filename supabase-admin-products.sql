@@ -1,7 +1,7 @@
 -- Ejecutar en Supabase SQL Editor después de crear el usuario administrador.
 -- El usuario debe tener app_metadata.role = 'admin'; no usar user_metadata para este control.
 
-grant select, insert, update on public.products to authenticated;
+grant select, insert, update, delete on public.products to authenticated;
 
 drop policy if exists "Admins can manage products" on public.products;
 create policy "Admins can manage products"

@@ -21,6 +21,7 @@ const translations = {
 		loadError: "No se pudo cargar el catálogo: {message}", retry: "Reintentar", noFeatured: "Aún no hay productos destacados.",
 		noProducts: "Aún no hay productos disponibles en el catálogo.", productsWillAppear: "Los productos aparecerán aquí cuando se agreguen a la base de datos.",
 		productDetails: "Consulta la ficha del producto para conocer sus detalles.", noDescription: "No hay una descripción disponible para este producto.",
+		productInformation: "Información del producto", category: "Categoría", subcategory: "Subcategoría", stock: "Existencias", available: "Disponible", unavailable: "No disponible",
 		quantity: "Cantidad", addQuote: "Agregar a cotización", inFavorites: "♥ En favoritos", addFavorites: "♡ Agregar a favoritos",
 		shareProduct: "Compartir producto", shareTitle: "Producto {name} de SAMA", linkCopied: "Enlace del producto copiado.",
 		shareUnavailable: "No se pudo compartir el enlace en este navegador.", shareError: "No se pudo compartir el producto.",
@@ -61,6 +62,7 @@ const translations = {
 		loadError: "Could not load catalog: {message}", retry: "Retry", noFeatured: "There are no featured products yet.",
 		noProducts: "There are no products in the catalog yet.", productsWillAppear: "Products will appear here once they are added to the database.",
 		productDetails: "Open the product details to learn more.", noDescription: "No description is available for this product.",
+		productInformation: "Product information", category: "Category", subcategory: "Subcategory", stock: "Stock", available: "Available", unavailable: "Unavailable",
 		quantity: "Quantity", addQuote: "Add to quote", inFavorites: "♥ In favorites", addFavorites: "♡ Add to favorites",
 		shareProduct: "Share product", shareTitle: "SAMA product: {name}", linkCopied: "Product link copied.",
 		shareUnavailable: "This browser cannot share the link.", shareError: "Could not share this product.",
@@ -182,6 +184,7 @@ function normalizeProduct(row) {
 		subcategory: String(row.subcategoria ?? row.Subcategoria ?? row.subcategory ?? "").trim(),
 		description: String(row.descripcion ?? row.Descripcion ?? row.description ?? row.detalle ?? "").trim(),
 		image: String(row.imagen ?? row.image ?? row["Image(url)"] ?? row.imagen_url ?? row.image_url ?? "").trim(),
+		slug: String(row.slug ?? "").trim(),
 		stock,
 		isFeatured: row.is_featured === true,
 	};
@@ -222,7 +225,7 @@ async function loadProducts() {
 	render();
 	const sharedSku = new URLSearchParams(window.location.search).get("producto");
 	const sharedProduct = products.find(product => product.sku === sharedSku);
-	if (sharedProduct) openModal(sharedProduct);
+	if (sharedProduct) openModal(sharedProduct, { updateUrl: false });
 }
 
 function render() {
@@ -494,7 +497,7 @@ function productCards(result = filteredProducts()) {
 			: t("noProducts");
 		return `<div class="empty-state">${message}<br><span class="sku">${t("productsWillAppear")}</span></div>`;
 	}
-	return result.map(p => `<article class="product-card"><div class="product-image"><img src="${escapeHtml(productImage(p))}" alt="${escapeHtml(p.name)}" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-body"><span class="product-category">${escapeHtml(p.category)}</span><h3>${escapeHtml(p.name)}</h3><span class="sku">SKU: ${escapeHtml(p.sku)}</span><p class="product-description">${escapeHtml(p.description || t("productDetails"))}</p><button class="primary-button" data-product="${escapeHtml(p.sku)}">${t("addQuote")}</button></div></article>`).join("");
+	return result.map(p => `<article class="product-card" data-product="${escapeHtml(p.sku)}" tabindex="0" role="button" aria-label="${escapeHtml(`${t("viewProduct")}: ${p.name}`)}"><div class="product-image"><img src="${escapeHtml(productImage(p))}" alt="${escapeHtml(p.name)}" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-body"><span class="product-category">${escapeHtml(p.category)}</span><h3>${escapeHtml(p.name)}</h3><span class="sku">SKU: ${escapeHtml(p.sku)}</span><p class="product-description">${escapeHtml(p.description || t("productDetails"))}</p><button class="primary-button" type="button">${t("viewProduct")}</button></div></article>`).join("");
 }
 function save() {
 	localStorage.setItem("sama-cart", JSON.stringify(state.cart));
@@ -512,17 +515,48 @@ function toast(message) {
 	const el = document.querySelector("#toast"); el.textContent = message; el.classList.add("show");
 	setTimeout(() => el.classList.remove("show"), 2600);
 }
-function openModal(product) {
+function productUrl(sku) {
+	const url = new URL(window.location.href);
+	url.searchParams.set("producto", sku);
+	return url;
+}
+
+function closeProductDetail() {
 	const modal = document.querySelector("#modal");
-	modal.innerHTML = `<div class="modal"><button class="modal-close" data-close aria-label="${t("close")}">×</button><div class="modal-content"><div class="modal-image"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div><span class="product-category">${escapeHtml(product.category)}${product.subcategory ? ` · ${escapeHtml(product.subcategory)}` : ""}</span><h2>${escapeHtml(product.name)}</h2><span class="sku">SKU: ${escapeHtml(product.sku)}</span><p class="product-description">${escapeHtml(product.description || t("noDescription"))}</p><div class="quantity"><span>${t("quantity")}</span><button data-quantity="-1" aria-label="${t("decreaseQuantity")}">−</button><strong id="quantity">1</strong><button data-quantity="1" aria-label="${t("increaseQuantity")}">+</button></div><button class="primary-button" data-modal-cart="${escapeHtml(product.sku)}">${t("addQuote")}</button><button class="secondary-button" data-modal-favorite="${escapeHtml(product.sku)}">${state.favorites.includes(product.sku) ? t("inFavorites") : t("addFavorites")}</button><button class="secondary-button" data-share>${t("shareProduct")}</button></div></div></div>`;
+	modal.classList.remove("open");
+	document.title = state.language === "en" ? "SAMA Distribution | Business Supplies" : "Distribuidora SAMA | Suministros para tu empresa";
+	const url = new URL(window.location.href);
+	if (url.searchParams.has("producto")) {
+		url.searchParams.delete("producto");
+		window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+	}
+}
+
+function openModal(product, options = {}) {
+	if (!product) return;
+	document.title = `${product.name} | SAMA`;
+	const modal = document.querySelector("#modal");
+	if (options.updateUrl !== false) {
+		const url = productUrl(product.sku);
+		window.history.pushState({ productSku: product.sku }, "", `${url.pathname}${url.search}${url.hash}`);
+	}
+	const stockLabel = product.stock == null || Number.isNaN(product.stock)
+		? "—"
+		: `${product.stock} (${product.stock > 0 ? t("available") : t("unavailable")})`;
+	const metadata = [
+		[t("category"), product.category || "—"],
+		[t("subcategory"), product.subcategory || "—"],
+		[t("stock"), stockLabel],
+	].map(([label, value]) => `<div class="product-detail-field"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
+	modal.innerHTML = `<div class="modal product-detail-modal"><button class="modal-close" data-close type="button" aria-label="${t("close")}">×</button><div class="modal-content"><div class="modal-image"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-detail-copy"><span class="product-category">${escapeHtml(product.category)}${product.subcategory ? ` · ${escapeHtml(product.subcategory)}` : ""}</span><h2>${escapeHtml(product.name)}</h2><span class="sku">SKU: ${escapeHtml(product.sku)}</span><p class="product-description product-detail-description">${escapeHtml(product.description || t("noDescription"))}</p><h3 class="product-information-title">${t("productInformation")}</h3><dl class="product-detail-fields">${metadata}</dl><div class="quantity"><span>${t("quantity")}</span><button type="button" data-quantity="-1" aria-label="${t("decreaseQuantity")}">−</button><strong id="quantity">1</strong><button type="button" data-quantity="1" aria-label="${t("increaseQuantity")}">+</button></div><button class="primary-button" data-modal-cart="${escapeHtml(product.sku)}">${t("addQuote")}</button><button class="secondary-button" data-modal-favorite="${escapeHtml(product.sku)}">${state.favorites.includes(product.sku) ? t("inFavorites") : t("addFavorites")}</button><button class="secondary-button" data-share>${t("shareProduct")}</button></div></div></div>`;
 	modal.classList.add("open");
 	let quantity = 1;
 	modal.querySelectorAll("[data-quantity]").forEach(btn => btn.addEventListener("click", () => { quantity = Math.max(1, quantity + Number(btn.dataset.quantity)); modal.querySelector("#quantity").textContent = quantity; }));
 	modal.querySelector("[data-modal-cart]").addEventListener("click", () => addToCart(product, quantity));
 	modal.querySelector("[data-modal-favorite]").addEventListener("click", () => toggleFavorite(product.sku));
 	modal.querySelector("[data-share]").addEventListener("click", () => shareProduct(product));
-	modal.querySelector("[data-close]").addEventListener("click", () => modal.classList.remove("open"));
-	modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); }, { once: true });
+	modal.querySelector("[data-close]").addEventListener("click", closeProductDetail);
+	modal.addEventListener("click", e => { if (e.target === modal) closeProductDetail(); }, { once: true });
 }
 async function shareProduct(product) {
 	const url = new URL(window.location.href);
@@ -709,7 +743,20 @@ function bindEvents() {
 		});
 	});
 	document.querySelectorAll("[data-scroll-products]").forEach(el => el.addEventListener("click", () => document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" })));
-	document.querySelectorAll("[data-product]").forEach(el => el.addEventListener("click", () => openModal(products.find(p => p.sku === el.dataset.product))));
+	document.querySelectorAll("[data-product]").forEach(el => {
+		const openProduct = () => openModal(products.find(p => p.sku === el.dataset.product));
+		el.addEventListener("click", event => {
+			if (event.target.closest("button")) return;
+			openProduct();
+		});
+		el.addEventListener("keydown", event => {
+			if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) {
+				event.preventDefault();
+				openProduct();
+			}
+		});
+		el.querySelector("button")?.addEventListener("click", openProduct);
+	});
 	document.querySelectorAll("[data-cart]").forEach(el => el.addEventListener("click", showCart));
 	document.querySelectorAll("[data-favorites]").forEach(el => el.addEventListener("click", showFavorites));
 	document.querySelectorAll("[data-reset]").forEach(el => el.addEventListener("click", () => { state.query = ""; state.category = "Todos"; state.subcategory = ""; categoryMenuOpen = false; render(); }));
@@ -720,6 +767,12 @@ function bindEvents() {
 
 document.addEventListener("visibilitychange", syncHeroAutoplay);
 reducedMotionPreference.addEventListener?.("change", syncHeroAutoplay);
+window.addEventListener("popstate", () => {
+	const sharedSku = new URLSearchParams(window.location.search).get("producto");
+	const sharedProduct = products.find(product => product.sku === sharedSku);
+	if (sharedProduct) openModal(sharedProduct, { updateUrl: false });
+	else document.querySelector("#modal")?.classList.remove("open");
+});
 document.addEventListener("click", event => {
 	if (categoryMenuOpen && !document.querySelector(".category-menu")?.contains(event.target)) closeCategoryMenu();
 });
