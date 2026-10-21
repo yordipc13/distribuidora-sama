@@ -26,6 +26,13 @@
   <body>
     <div class="admin-shell">
       <header class="topbar">
+        <div class="admin-menu">
+          <button class="button menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="admin-navigation">☰ <span data-i18n="menu">Menú</span></button>
+          <nav class="admin-navigation" id="admin-navigation" hidden aria-label="Navegación del panel">
+            <button class="menu-item is-active" type="button" data-admin-view="catalog" data-i18n="catalogTab">Catálogo</button>
+            <button class="menu-item" type="button" data-admin-view="statistics" data-i18n="statisticsTab">Estadísticas</button>
+          </nav>
+        </div>
         <a class="brand" href="../index.html" aria-label="SAMA, inicio">
           <img src="../Logo y Banner/Logo.jpg" alt="" />
           <span class="brand-name">SAMA <strong>Distribuidora</strong></span>
@@ -58,7 +65,7 @@
       </section>
 
       <main class="workspace" hidden>
-        <section class="page-heading">
+        <section class="page-heading" id="catalog-heading">
           <div>
             <p class="eyebrow" data-i18n="catalog">CATÁLOGO</p>
             <h1 data-i18n="adminTitle">Administración SAMA</h1>
@@ -84,7 +91,7 @@
                 <option value="covid19" data-i18n="covid19">Covid-19</option>
               </select>
             </label>
-            <input id="excel-import-input" type="file" accept=".xlsx,.xls" hidden />
+            <input id="excel-import-input" type="file" accept=".xlsx,.xls,.xlsm,.xlsb,application/vnd.ms-excel.sheet.binary.macroEnabled.12,application/vnd.ms-excel.sheet.macroEnabled.12" hidden />
             <button class="button" id="import-excel" type="button" data-i18n="importExcel">Importar Excel</button>
           </div>
           <p class="import-status" id="import-status" role="status" aria-live="polite"></p>
@@ -109,6 +116,50 @@
           <div class="table-footer">
             <span data-i18n="footerTitle">SAMA · Catálogo</span>
             <span data-i18n="footerData">Datos activos de Supabase</span>
+          </div>
+        </section>
+        <section class="statistics-panel" id="statistics-panel" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="statisticsEyebrow">SEGUIMIENTO</p>
+              <h1 data-i18n="statisticsTitle">Estadísticas de generación</h1>
+              <p class="page-description" data-i18n="statisticsDescription">Consulta el tiempo total y el tiempo empleado en cada producto.</p>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <article class="stat-card">
+              <span data-i18n="totalTime">Tiempo total</span>
+              <strong id="total-timer">00:00:00</strong>
+              <small id="total-timer-state" data-i18n="notStarted">Sin iniciar</small>
+            </article>
+            <article class="stat-card">
+              <span data-i18n="completedProducts">Productos procesados</span>
+              <strong id="stats-completed">0 / 0</strong>
+              <small id="stats-failures">0 errores</small>
+            </article>
+            <article class="stat-card">
+              <span data-i18n="individualTimer">Temporizador individual</span>
+              <strong id="individual-timer">00:00:00</strong>
+              <small id="individual-timer-state" data-i18n="notStarted">Sin iniciar</small>
+            </article>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th data-i18n="sequence">#</th>
+                  <th data-i18n="sku">SKU</th>
+                  <th data-i18n="product">Producto</th>
+                  <th data-i18n="individualTime">Tiempo individual</th>
+                  <th data-i18n="result">Resultado</th>
+                </tr>
+              </thead>
+              <tbody id="stats-body"></tbody>
+            </table>
+            <div class="empty-state" id="stats-empty">
+              <strong data-i18n="noStatistics">Aún no hay estadísticas</strong>
+              <span data-i18n="statisticsHint">Inicia una importación para registrar tiempos.</span>
+            </div>
           </div>
         </section>
       </main>

@@ -195,6 +195,10 @@ footer p, footer a { color: #94a3b8; font-size: .88rem; line-height: 1.7; }
 .quote-header h2 { margin: 5px 48px 5px 0; font-size: 1.75rem; }
 .quote-header p { margin: 0; color: var(--muted); font-size: .9rem; }
 .auth-form, .account-content { display: grid; gap: 14px; padding: 24px 30px 30px; }
+.google-auth-button { display: flex; width: 100%; min-height: 46px; align-items: center; justify-content: center; gap: 12px; color: #1f1f1f; background: #fff; border: 1px solid #dadce0; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.google-auth-button:hover { background: #f8faff; border-color: #c7d2e0; }
+.google-auth-button span { font-size: 1.15rem; font-weight: 800; }
+.auth-divider { margin: 0; color: var(--muted); font-size: .78rem; text-align: center; }
 .auth-form label { display: grid; gap: 7px; color: var(--ink); font-size: .84rem; font-weight: 700; }
 .auth-form input { width: 100%; min-height: 44px; padding: 10px 12px; color: var(--ink); background: var(--white); border: 1px solid var(--line); border-radius: 7px; }
 .auth-form input:focus-visible { border-color: var(--green); outline: 2px solid rgb(21 128 61 / 18%); }
@@ -255,6 +259,8 @@ footer p, footer a { color: #94a3b8; font-size: .88rem; line-height: 1.7; }
 :root[data-theme="dark"] .modal,
 :root[data-theme="dark"] .secondary-button,
 :root[data-theme="dark"] .mobile-nav { color: var(--ink); background: var(--white); }
+:root[data-theme="dark"] .google-auth-button { color: #1f1f1f; background: #fff; border-color: #dadce0; }
+:root[data-theme="dark"] .google-auth-button:hover { background: #f8faff; border-color: #c7d2e0; }
 :root[data-theme="dark"] .category-card:after { background: #1e3b2d; }
 :root[data-theme="dark"] .product-image,
 :root[data-theme="dark"] .modal-image { background: #101a29; }

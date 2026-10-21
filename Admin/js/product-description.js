@@ -1,8 +1,12 @@
 (function configureProductDescriptions(global) {
   const DEFAULT_DELAY_MS = 3500;
+  const DEFAULT_MAX_RETRIES = 3;
+  const DEFAULT_RETRY_DELAY_MS = 3000;
 
   function isEmptyDescription(value) {
-    return value == null || (typeof value === "string" && value.trim() === "");
+    return value == null
+      || value === 0
+      || (typeof value === "string" && (value.trim() === "" || value.trim() === "0"));
   }
 
   function descriptionField(product) {
@@ -26,26 +30,44 @@
   }
 
   async function generateDescription(product, options = {}) {
-    const response = await fetch(getWorkerUrl(options), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sku: product.sku ?? "",
-        producto: product.producto ?? product.name ?? "",
-        categoria: product.categoria ?? product.category ?? "",
-        subcategoria: product.subcategoria ?? product.subcategory ?? "",
-        stock: product.stock ?? null,
-      }),
+    const maxRetries = Number.isInteger(options.maxRetries) ? Math.max(0, options.maxRetries) : DEFAULT_MAX_RETRIES;
+    const retryDelayMs = Number.isFinite(options.retryDelayMs) ? Math.max(0, options.retryDelayMs) : DEFAULT_RETRY_DELAY_MS;
+    const requestBody = JSON.stringify({
+      sku: product.sku ?? "",
+      producto: product.producto ?? product.name ?? "",
+      categoria: product.categoria ?? product.category ?? "",
+      subcategoria: product.subcategoria ?? product.subcategory ?? "",
+      stock: product.stock ?? null,
     });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || `El Worker respondió con HTTP ${response.status}.`);
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      let response;
+      try {
+        response = await fetch(getWorkerUrl(options), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
+        });
+      } catch (error) {
+        if (attempt === maxRetries) throw error;
+        await wait(retryDelayMs * (attempt + 1));
+        continue;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        if (!payload.description || typeof payload.description !== "string") {
+          throw new Error("El Worker no devolvió una descripción válida.");
+        }
+        return payload.description.trim();
+      }
+
+      const message = payload.error || `El Worker respondió con HTTP ${response.status}.`;
+      const retryable = response.status === 429 || response.status >= 500
+        || /unavailable|temporarily|overloaded|rate.?limit/i.test(message);
+      if (!retryable || attempt === maxRetries) throw new Error(message);
+      await wait(retryDelayMs * (attempt + 1));
     }
-    if (!payload.description || typeof payload.description !== "string") {
-      throw new Error("El Worker no devolvió una descripción válida.");
-    }
-    return payload.description.trim();
   }
 
   async function prepareProductForSync(product, options = {}) {
@@ -71,19 +93,35 @@
       if (!product || typeof product !== "object") {
         throw new TypeError("Cada producto debe ser un objeto.");
       }
-      if (!isEmptyDescription(descriptionValue(product))) {
-        prepared.push({ ...product });
-        continue;
+      options.onProductStart?.(product, { completed: prepared.length, total: products.length });
+      try {
+        let preparedProduct;
+        if (!isEmptyDescription(descriptionValue(product))) {
+          preparedProduct = { ...product };
+        } else {
+          if (generatedCount > 0) await wait(delayMs);
+          preparedProduct = await prepareProductForSync(product, options);
+          generatedCount += 1;
+        }
+        prepared.push(preparedProduct);
+        options.onDescriptionReady?.(preparedProduct);
+        if (typeof options.onPrepared === "function") {
+          await options.onPrepared(preparedProduct, {
+            completed: prepared.length,
+            total: products.length,
+          });
+        }
+      } catch (error) {
+        if (typeof options.onError !== "function") throw error;
+        options.onError(product, error, {
+          completed: prepared.length,
+          total: products.length,
+        });
       }
-
-      if (generatedCount > 0) await wait(delayMs);
-      const preparedProduct = await prepareProductForSync(product, options);
-      prepared.push(preparedProduct);
-      generatedCount += 1;
       options.onProgress?.({
-        completed: prepared.length,
+        completed: prepared.length + (typeof options.onError === "function" ? 1 : 0),
         total: products.length,
-        sku: preparedProduct.sku ?? "",
+        sku: product.sku ?? "",
       });
     }
 

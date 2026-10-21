@@ -21,16 +21,35 @@ const workspace = document.querySelector(".workspace");
 const signInForm = document.querySelector("#sign-in-form");
 const signOutButton = document.querySelector("#sign-out");
 const authMessage = document.querySelector("#auth-message");
+const menuToggle = document.querySelector("#menu-toggle");
+const adminNavigation = document.querySelector("#admin-navigation");
+const statisticsPanel = document.querySelector("#statistics-panel");
+const catalogPanel = document.querySelector(".catalog-panel");
+const catalogHeading = document.querySelector("#catalog-heading");
+const statsBody = document.querySelector("#stats-body");
+const statsEmpty = document.querySelector("#stats-empty");
+const totalTimer = document.querySelector("#total-timer");
+const totalTimerState = document.querySelector("#total-timer-state");
+const statsCompleted = document.querySelector("#stats-completed");
+const statsFailures = document.querySelector("#stats-failures");
+const individualTimer = document.querySelector("#individual-timer");
+const individualTimerState = document.querySelector("#individual-timer-state");
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let manualTheme = false;
 let language = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
 let connectionError = "";
+let totalTimerStartedAt = 0;
+let totalTimerStoppedAt = 0;
+let individualTimerStartedAt = 0;
+let individualTimerStoppedAt = 0;
+let totalTimerInterval = null;
+let statistics = { total: 0, completed: 0, failures: 0, rows: [] };
 
 const translations = {
   es: {
     title: "Administración de catálogo | SAMA", refresh: "Actualizar", backToCatalog: "Volver al catálogo",
     catalog: "CATÁLOGO", catalogAria: "Catálogo de SAMA", adminTitle: "Administración SAMA", adminDescription: "Consulta productos, categorías y marcas activas.",
-    readOnly: "Consulta e importación", importExcel: "Importar Excel", signOut: "Cerrar sesión", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
+    readOnly: "Consulta e importación", importExcel: "Importar Excel", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", sequence: "#", individualTime: "Tiempo individual", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
     footerTitle: "SAMA · Catálogo", footerData: "Datos activos de Supabase", searchPlaceholder: "Buscar en el catálogo...",
     results: "registros", result: "registro",     loading: "Conectando a Supabase...", connected: "Conectado a Supabase", generatingDescriptions: "Generando descripciones:",
     clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}", authError: "No se pudo iniciar sesión: {message}", notAdmin: "La cuenta no tiene permisos de administrador.",
@@ -44,7 +63,7 @@ const translations = {
   en: {
     title: "Catalog administration | SAMA", refresh: "Refresh", backToCatalog: "Back to catalog",
     catalog: "CATALOG", catalogAria: "SAMA catalog", adminTitle: "SAMA administration", adminDescription: "View active products, categories, and brands.",
-    readOnly: "View and import", importExcel: "Import Excel", signOut: "Sign out", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
+    readOnly: "View and import", importExcel: "Import Excel", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", sequence: "#", individualTime: "Individual time", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
     footerTitle: "SAMA · Catalog", footerData: "Active Supabase data", searchPlaceholder: "Search the catalog...",
     results: "records", result: "record",     loading: "Connecting to Supabase...", connected: "Connected to Supabase", generatingDescriptions: "Generating descriptions:",
     clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}", authError: "Could not sign in: {message}", notAdmin: "This account does not have administrator permissions.",
@@ -196,35 +215,145 @@ function toProductRow(row) {
   };
 }
 
+function formatDuration(milliseconds) {
+  const totalSeconds = Math.max(0, milliseconds) / 1000;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  const tenths = Math.floor((milliseconds % 1000) / 100);
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[character]));
+}
+
+function renderStatistics() {
+  const elapsed = totalTimerStartedAt
+    ? (totalTimerStoppedAt || performance.now()) - totalTimerStartedAt
+    : 0;
+  const individualElapsed = individualTimerStartedAt
+    ? (individualTimerStoppedAt || performance.now()) - individualTimerStartedAt
+    : 0;
+  totalTimer.textContent = formatDuration(elapsed);
+  individualTimer.textContent = formatDuration(individualElapsed);
+  statsCompleted.textContent = `${statistics.completed} / ${statistics.total}`;
+  statsFailures.textContent = `${statistics.failures} ${t("errors")}`;
+  statsEmpty.hidden = statistics.rows.length > 0;
+  statsBody.innerHTML = statistics.rows.map((row, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(row.sku)}</td>
+      <td>${escapeHtml(row.producto)}</td>
+      <td>${formatDuration(row.duration)}</td>
+      <td class="${row.success ? "success" : "failure"}">${row.success ? t("success") : `${t("failure")}: ${escapeHtml(row.error)}`}</td>
+    </tr>
+  `).join("");
+}
+
+function resetStatistics(total) {
+  statistics = { total, completed: 0, failures: 0, rows: [] };
+  totalTimerStartedAt = performance.now();
+  totalTimerStoppedAt = 0;
+  individualTimerStartedAt = 0;
+  individualTimerStoppedAt = 0;
+  individualTimerState.textContent = t("notStarted");
+  totalTimerState.textContent = t("running");
+  clearInterval(totalTimerInterval);
+  totalTimerInterval = setInterval(renderStatistics, 100);
+  renderStatistics();
+}
+
+function finishStatistics() {
+  totalTimerStoppedAt = performance.now();
+  totalTimerState.textContent = t("finished");
+  clearInterval(totalTimerInterval);
+  totalTimerInterval = null;
+  renderStatistics();
+}
+
 async function importExcelFile(file) {
   if (!window.XLSX) throw new Error("La biblioteca de Excel todavía no está disponible. Recarga el panel e inténtalo de nuevo.");
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", bookVBA: true, cellDates: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!firstSheet) throw new Error("El archivo no contiene una primera hoja válida.");
   const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
   if (!rows.length) throw new Error("La primera hoja no contiene productos.");
 
   const products = rows.map(toProductRow);
-  const prepared = await window.SamaProductDescriptions.prepareProductsForSync(products, {
+  let savedCount = 0;
+  const startedProducts = new Map();
+  const descriptionDurations = new Map();
+  resetStatistics(products.length);
+  try {
+    await window.SamaProductDescriptions.prepareProductsForSync(products, {
     delayMs: 4500,
     onProgress: progress => {
       importStatus.textContent = `${t("generatingDescriptions")} ${progress.completed}/${progress.total} (${progress.sku})`;
     },
-  });
-  const payload = prepared.map(product => ({
-    Sku: product.sku,
-    Producto: product.producto,
-    Categoria: product.categoria || null,
-    Subcategoria: product.subcategoria || null,
-    descripcion: product.descripcion || null,
-    "Image(url)": product.imagen_url || null,
-    stock: product.stock,
-    is_active: true,
-  }));
-
-  const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
-  if (error) throw error;
-  return { count: payload.length };
+    onPrepared: async (product, progress) => {
+      const payload = {
+        Sku: product.sku,
+        Producto: product.producto,
+        Categoria: product.categoria || null,
+        Subcategoria: product.subcategoria || null,
+        descripcion: product.descripcion || null,
+        "Image(url)": product.imagen_url || null,
+        stock: product.stock,
+        is_active: true,
+      };
+      const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
+      if (error) throw error;
+      const startedAt = startedProducts.get(product.sku) || performance.now();
+      const descriptionDuration = descriptionDurations.get(product.sku) || (performance.now() - startedAt);
+      individualTimerState.textContent = `${t("finished")} (${product.sku})`;
+      savedCount += 1;
+      statistics.completed += 1;
+      statistics.rows.push({ sku: product.sku, producto: product.producto, duration: descriptionDuration, success: true });
+      renderStatistics();
+      importStatus.textContent = `Guardados ${savedCount}/${progress.total} (${product.sku})`;
+    },
+    onProductStart: product => {
+      startedProducts.set(product.sku, performance.now());
+      individualTimerStartedAt = startedProducts.get(product.sku);
+      individualTimerStoppedAt = 0;
+      individualTimerState.textContent = `${t("running")} (${product.sku})`;
+      renderStatistics();
+    },
+    onDescriptionReady: product => {
+      const duration = performance.now() - (startedProducts.get(product.sku) || performance.now());
+      descriptionDurations.set(product.sku, duration);
+      individualTimerStoppedAt = performance.now();
+      individualTimerState.textContent = `${t("finished")} (${product.sku})`;
+      renderStatistics();
+    },
+    onError: (product, error) => {
+      individualTimerStoppedAt = performance.now();
+      statistics.completed += 1;
+      statistics.failures += 1;
+      statistics.rows.push({
+        sku: product.sku,
+        producto: product.producto,
+        duration: descriptionDurations.get(product.sku)
+          || (performance.now() - (startedProducts.get(product.sku) || performance.now())),
+        success: false,
+        error: error.message || "Error desconocido",
+      });
+      individualTimerState.textContent = `${t("finished")} (${product.sku})`;
+      renderStatistics();
+      importStatus.textContent = `Se omitió ${product.sku}: ${error.message || "Error desconocido"}`;
+    },
+    });
+    return { count: savedCount, failures: statistics.failures };
+  } finally {
+    finishStatistics();
+  }
 }
 
 function valueFor(record, field) {
@@ -368,6 +497,7 @@ async function loadView() {
     statusElement.textContent = t("connected");
     statusElement.dataset.state = "connected";
     render();
+    renderStatistics();
   } catch (error) {
     records = [];
     connectionError = error.message || "Unknown error";
@@ -399,23 +529,38 @@ viewSelect.addEventListener("change", () => {
 searchInput.addEventListener("input", render);
 refreshButton.addEventListener("click", loadView);
 importButton.addEventListener("click", () => importInput.click());
+menuToggle.addEventListener("click", () => {
+  const isOpen = adminNavigation.hidden;
+  adminNavigation.hidden = !isOpen;
+  menuToggle.setAttribute("aria-expanded", String(isOpen));
+});
+document.querySelectorAll("[data-admin-view]").forEach(button => {
+  button.addEventListener("click", () => {
+    const statisticsView = button.dataset.adminView === "statistics";
+    catalogPanel.hidden = statisticsView;
+    catalogHeading.hidden = statisticsView;
+    statisticsPanel.hidden = !statisticsView;
+    document.querySelectorAll("[data-admin-view]").forEach(item => item.classList.toggle("is-active", item === button));
+    adminNavigation.hidden = true;
+    menuToggle.setAttribute("aria-expanded", "false");
+    if (statisticsView) renderStatistics();
+  });
+});
 importInput.addEventListener("change", async event => {
   const [file] = event.currentTarget.files;
   event.currentTarget.value = "";
   if (!file) return;
 
   importButton.disabled = true;
-  refreshButton.disabled = true;
   importStatus.textContent = `${t("loading")} ${file.name}`;
   try {
     const result = await importExcelFile(file);
-    importStatus.textContent = `${result.count} productos importados.${result.multiCategoryCount ? ` ${result.multiCategoryCount} usan varias categorías; se guardó la primera como principal.` : ""}`;
+    importStatus.textContent = `${result.count} productos importados${result.failures ? `; ${result.failures} con error, revisa Estadísticas.` : "."}`;
     await loadView();
   } catch (error) {
     importStatus.textContent = `Error de importación: ${error.message || "Error desconocido."}`;
   } finally {
     importButton.disabled = false;
-    refreshButton.disabled = false;
   }
 });
 signInForm.addEventListener("submit", async event => {
