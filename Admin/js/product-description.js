@@ -17,8 +17,30 @@
     return product.descripcion ?? product.description;
   }
 
-  function wait(milliseconds) {
-    return new Promise(resolve => setTimeout(resolve, milliseconds));
+  function wait(milliseconds, signal) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", abort);
+        resolve();
+      }, milliseconds);
+      function abort() {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", abort);
+        const error = new Error("La generación fue cancelada.");
+        error.name = "AbortError";
+        reject(error);
+      }
+      if (signal?.aborted) abort();
+      else signal?.addEventListener("abort", abort, { once: true });
+    });
+  }
+
+  function throwIfAborted(signal) {
+    if (signal?.aborted) {
+      const error = new Error("La generación fue cancelada.");
+      error.name = "AbortError";
+      throw error;
+    }
   }
 
   function getWorkerUrl(options = {}) {
@@ -30,6 +52,7 @@
   }
 
   async function generateDescription(product, options = {}) {
+    throwIfAborted(options.signal);
     const maxRetries = Number.isInteger(options.maxRetries) ? Math.max(0, options.maxRetries) : DEFAULT_MAX_RETRIES;
     const retryDelayMs = Number.isFinite(options.retryDelayMs) ? Math.max(0, options.retryDelayMs) : DEFAULT_RETRY_DELAY_MS;
     const requestBody = JSON.stringify({
@@ -47,10 +70,13 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: requestBody,
+          signal: options.signal,
         });
       } catch (error) {
+        if (error.name === "AbortError") throw error;
         if (attempt === maxRetries) throw error;
-        await wait(retryDelayMs * (attempt + 1));
+        throwIfAborted(options.signal);
+        await wait(retryDelayMs * (attempt + 1), options.signal);
         continue;
       }
 
@@ -66,7 +92,8 @@
       const retryable = response.status === 429 || response.status >= 500
         || /unavailable|temporarily|overloaded|rate.?limit/i.test(message);
       if (!retryable || attempt === maxRetries) throw new Error(message);
-      await wait(retryDelayMs * (attempt + 1));
+      throwIfAborted(options.signal);
+      await wait(retryDelayMs * (attempt + 1), options.signal);
     }
   }
 
@@ -90,6 +117,7 @@
     let generatedCount = 0;
 
     for (const product of products) {
+      throwIfAborted(options.signal);
       if (!product || typeof product !== "object") {
         throw new TypeError("Cada producto debe ser un objeto.");
       }
@@ -99,7 +127,10 @@
         if (!isEmptyDescription(descriptionValue(product))) {
           preparedProduct = { ...product };
         } else {
-          if (generatedCount > 0) await wait(delayMs);
+          if (generatedCount > 0) {
+            await wait(delayMs);
+            throwIfAborted(options.signal);
+          }
           preparedProduct = await prepareProductForSync(product, options);
           generatedCount += 1;
         }
@@ -112,6 +143,7 @@
           });
         }
       } catch (error) {
+        if (error.name === "AbortError") throw error;
         if (typeof options.onError !== "function") throw error;
         options.onError(product, error, {
           completed: prepared.length,

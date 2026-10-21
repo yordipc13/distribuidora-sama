@@ -50,6 +50,7 @@ const statsCompleted = document.querySelector("#stats-completed");
 const statsFailures = document.querySelector("#stats-failures");
 const individualTimer = document.querySelector("#individual-timer");
 const individualTimerState = document.querySelector("#individual-timer-state");
+const cancelGenerationButton = document.querySelector("#cancel-generation");
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 let manualTheme = false;
 let language = navigator.language?.toLowerCase().startsWith("en") ? "en" : "es";
@@ -60,6 +61,7 @@ let individualTimerStartedAt = 0;
 let individualTimerStoppedAt = 0;
 let totalTimerInterval = null;
 let statistics = { total: 0, completed: 0, failures: 0, rows: [] };
+let generationController = null;
 const selectedProductSkus = new Set();
 let editingProductSku = null;
 
@@ -67,7 +69,7 @@ const translations = {
   es: {
     title: "Administración de catálogo | SAMA", refresh: "Actualizar", backToCatalog: "Volver al catálogo",
     catalog: "CATÁLOGO", catalogAria: "Catálogo de SAMA", adminTitle: "Administración SAMA", adminDescription: "Consulta productos, categorías y marcas activas.",
-    readOnly: "Consulta e importación", importExcel: "Importar Excel", generateDescriptions: "Generar descripciones", addProduct: "Agregar", delete: "Borrar", deleteSelected: "Borrar seleccionados", deleteCategory: "Borrar categoría actual", deleteCategoryTitle: "Borrar categoría", deleteCategoryDescription: "Selecciona la categoría cuyos productos deseas borrar.", selectCategory: "Selecciona una categoría", deleteDescriptions: "Borrar todas las descripciones", deleteAll: "Borrar todos los productos", deleteOne: "Borrar producto", edit: "Editar", save: "Guardar", cancel: "Cancelar", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", sequence: "#", individualTime: "Tiempo individual", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
+    readOnly: "Consulta e importación", importExcel: "Importar Excel", generateDescriptions: "Generar descripciones", addProduct: "Agregar", delete: "Borrar", deleteSelected: "Borrar seleccionados", deleteCategory: "Borrar categoría actual", deleteCategoryTitle: "Borrar categoría", deleteCategoryDescription: "Selecciona la categoría cuyos productos deseas borrar.", selectCategory: "Selecciona una categoría", deleteDescriptions: "Borrar todas las descripciones", deleteAll: "Borrar todos los productos", deleteOne: "Borrar producto", edit: "Editar", save: "Guardar", cancel: "Cancelar", cancelGeneration: "Cancelar generación", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", canceled: "Cancelado", sequence: "#", individualTime: "Tiempo individual", generatedDescription: "Descripción generada", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
     footerTitle: "SAMA · Catálogo", footerData: "Datos activos de Supabase", searchPlaceholder: "Buscar en el catálogo...",
     results: "registros", result: "registro",     loading: "Conectando a Supabase...", connected: "Conectado a Supabase", generatingDescriptions: "Generando descripciones:",
     clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}", authError: "No se pudo iniciar sesión: {message}", notAdmin: "La cuenta no tiene permisos de administrador.",
@@ -81,7 +83,7 @@ const translations = {
   en: {
     title: "Catalog administration | SAMA", refresh: "Refresh", backToCatalog: "Back to catalog",
     catalog: "CATALOG", catalogAria: "SAMA catalog", adminTitle: "SAMA administration", adminDescription: "View active products, categories, and brands.",
-    readOnly: "View and import", importExcel: "Import Excel", generateDescriptions: "Generate descriptions", addProduct: "Add", delete: "Delete", deleteSelected: "Delete selected", deleteCategory: "Delete current category", deleteCategoryTitle: "Delete category", deleteCategoryDescription: "Select the category whose products you want to delete.", selectCategory: "Select a category", deleteDescriptions: "Delete all descriptions", deleteAll: "Delete all products", deleteOne: "Delete product", edit: "Edit", save: "Save", cancel: "Cancel", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", sequence: "#", individualTime: "Individual time", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
+    readOnly: "View and import", importExcel: "Import Excel", generateDescriptions: "Generate descriptions", addProduct: "Add", delete: "Delete", deleteSelected: "Delete selected", deleteCategory: "Delete current category", deleteCategoryTitle: "Delete category", deleteCategoryDescription: "Select the category whose products you want to delete.", selectCategory: "Select a category", deleteDescriptions: "Delete all descriptions", deleteAll: "Delete all products", deleteOne: "Delete product", edit: "Edit", save: "Save", cancel: "Cancel", cancelGeneration: "Cancel generation", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", canceled: "Canceled", sequence: "#", individualTime: "Individual time", generatedDescription: "Generated description", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
     footerTitle: "SAMA · Catalog", footerData: "Active Supabase data", searchPlaceholder: "Search the catalog...",
     results: "records", result: "record",     loading: "Connecting to Supabase...", connected: "Connected to Supabase", generatingDescriptions: "Generating descriptions:",
     clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}", authError: "Could not sign in: {message}", notAdmin: "This account does not have administrator permissions.",
@@ -337,6 +339,7 @@ function renderStatistics() {
       <td>${escapeHtml(row.producto)}</td>
       <td>${formatDuration(row.duration)}</td>
       <td class="${row.success ? "success" : "failure"}">${row.success ? t("success") : `${t("failure")}: ${escapeHtml(row.error)}`}</td>
+      <td>${escapeHtml(row.description || "—")}</td>
     </tr>
   `).join("");
 }
@@ -349,14 +352,16 @@ function resetStatistics(total) {
   individualTimerStoppedAt = 0;
   individualTimerState.textContent = t("notStarted");
   totalTimerState.textContent = t("running");
+  cancelGenerationButton.disabled = false;
   clearInterval(totalTimerInterval);
   totalTimerInterval = setInterval(renderStatistics, 100);
   renderStatistics();
 }
 
-function finishStatistics() {
+function finishStatistics(state = t("finished")) {
   totalTimerStoppedAt = performance.now();
-  totalTimerState.textContent = t("finished");
+  totalTimerState.textContent = state;
+  cancelGenerationButton.disabled = true;
   clearInterval(totalTimerInterval);
   totalTimerInterval = null;
   renderStatistics();
@@ -429,10 +434,13 @@ async function generateMissingDescriptions() {
   const startedProducts = new Map();
   const descriptionDurations = new Map();
   resetStatistics(products.length);
+  generationController = new AbortController();
+  const signal = generationController.signal;
   let savedCount = 0;
   try {
     await window.SamaProductDescriptions.prepareProductsForSync(products, {
       delayMs: 4500,
+      signal,
       onProgress: progress => {
         importStatus.textContent = `${t("generatingDescriptions")} ${progress.completed}/${progress.total} (${progress.sku})`;
       },
@@ -448,6 +456,7 @@ async function generateMissingDescriptions() {
           producto: product.producto,
           duration: descriptionDurations.get(product.sku) || 0,
           success: true,
+          description: product.descripcion,
         });
         renderStatistics();
         importStatus.textContent = `Guardadas ${savedCount}/${progress.total} (${product.sku})`;
@@ -467,6 +476,7 @@ async function generateMissingDescriptions() {
         renderStatistics();
       },
       onError: (product, generationError) => {
+        if (generationError.name === "AbortError") throw generationError;
         individualTimerStoppedAt = performance.now();
         statistics.completed += 1;
         statistics.failures += 1;
@@ -476,14 +486,22 @@ async function generateMissingDescriptions() {
           duration: performance.now() - (startedProducts.get(product.sku) || performance.now()),
           success: false,
           error: generationError.message || "Error desconocido",
+          description: "",
         });
         renderStatistics();
         importStatus.textContent = `Se omitió ${product.sku}: ${generationError.message || "Error desconocido"}`;
       },
     });
     return { count: savedCount, failures: statistics.failures };
+  } catch (generationError) {
+    if (generationError.name === "AbortError") {
+      importStatus.textContent = "Generación cancelada. Las descripciones guardadas antes de cancelar se conservaron.";
+      return { count: savedCount, failures: statistics.failures, canceled: true };
+    }
+    throw generationError;
   } finally {
-    finishStatistics();
+    finishStatistics(signal.aborted ? t("canceled") : t("finished"));
+    generationController = null;
   }
 }
 
@@ -878,9 +896,11 @@ generateDescriptionsButton.addEventListener("click", async () => {
   importStatus.textContent = "Buscando productos sin descripción...";
   try {
     const result = await generateMissingDescriptions();
-    importStatus.textContent = result.failures
-      ? `${result.count} descripciones generadas; ${result.failures} con error.`
-      : `${result.count} descripciones generadas.`;
+    if (!result.canceled) {
+      importStatus.textContent = result.failures
+        ? `${result.count} descripciones generadas; ${result.failures} con error.`
+        : `${result.count} descripciones generadas.`;
+    }
     await loadView();
   } catch (error) {
     finishStatistics();
@@ -889,6 +909,11 @@ generateDescriptionsButton.addEventListener("click", async () => {
     importButton.disabled = false;
     generateDescriptionsButton.disabled = false;
   }
+});
+cancelGenerationButton.addEventListener("click", () => {
+  if (!generationController) return;
+  cancelGenerationButton.disabled = true;
+  generationController.abort();
 });
 signInForm.addEventListener("submit", async event => {
   event.preventDefault();
