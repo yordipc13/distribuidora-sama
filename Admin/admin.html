@@ -19,8 +19,7 @@
       // Solo es la URL pública del Worker. La GEMINI_API_KEY vive en Cloudflare.
       window.SAMA_DESCRIPTION_WORKER_URL = "https://sama-description-api.developpage.workers.dev";
       window.SAMA_IMAGE_WORKER_URL = "https://sama-images-api.developpage.workers.dev";
-      // "local" guarda en la carpeta Galeria; "r2" se habilitará al configurar el bucket.
-      window.SAMA_IMAGE_STORAGE_MODE = "local";
+      window.SAMA_TRANSLATION_WORKER_URL = "https://sama-description-api.developpage.workers.dev/translate";
     </script>
     <script src="js/product-description.js" defer></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
@@ -166,7 +165,6 @@
               <div class="image-results-meta">
                 <span id="image-selection-count">0 seleccionadas</span>
                 <div class="image-results-actions">
-                  <button class="button button-secondary" id="choose-image-folder" type="button" data-i18n="chooseImageFolder">Elegir carpeta Galería</button>
                   <button class="button button-secondary" id="remove-selected-images" type="button" data-i18n="removeSelectedImages" disabled>Eliminar seleccionadas</button>
                   <button class="button" id="save-selected-images" type="button" data-i18n="nextImage" disabled>Siguiente</button>
                 </div>

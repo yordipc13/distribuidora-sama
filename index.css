@@ -296,7 +296,7 @@ footer p, footer a { color: #94a3b8; font-size: .88rem; line-height: 1.7; }
 .favorite-empty h3 { margin: 0; font-size: 1rem; }
 .favorite-empty p { margin: 8px 0 16px; color: var(--muted); font-size: .86rem; }
 .whatsapp { position: fixed; right: 22px; bottom: 24px; z-index: 30; display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; color: #fff; background: #16a34a; border-radius: 28px; box-shadow: 0 5px 15px rgba(22,163,74,.35); font-size: .84rem; font-weight: 700; white-space: nowrap; }
-.whatsapp img { display: block; width: 27px; height: 27px; flex: 0 0 27px; object-fit: cover; border-radius: 50%; }
+.whatsapp img { display: block; width: 38px; height: 38px; flex: 0 0 38px; object-fit: cover; border-radius: 50%; }
 
 :root[data-theme="dark"] .topbar,
 :root[data-theme="dark"] .info-band,
@@ -418,7 +418,5 @@ footer p, footer a { color: #94a3b8; font-size: .88rem; line-height: 1.7; }
 
 @media (prefers-reduced-motion: reduce) {
 	.hero-slide:not([hidden]) { animation: none; }
-	.hero-dot.active::after { animation: none; transform: scaleX(1); }
-}
 	.hero-dot.active::after { animation: none; transform: scaleX(1); }
 }

@@ -1,3 +1,14 @@
+2026-10-22 - Caché opcional para traducciones del catálogo
+
+- El Worker ya no bloquea la traducción al inglés si falla la lectura o escritura de `product_translations`; devuelve el resultado de Gemini igualmente y usa la caché cuando está disponible.
+- La web conserva en `localStorage` el idioma elegido manualmente y lo restaura al recargar.
+
+2026-10-22 - Traducción de productos en Administración
+
+- El panel Admin reutiliza la tabla `product_translations` y el Worker de traducción que ya usa el catálogo público.
+- En inglés se muestran traducciones guardadas y se solicitan las faltantes solo al acercar filas a la vista; al elegir español se muestran los datos originales.
+- La selección inicial sigue la configuración de idioma del navegador y el selector permite cambiarla manualmente, sin modificar los productos originales.
+
 2026-10-19 - Primera interfaz pública
 
 - Se construyó la interfaz pública responsive en index.html, index.css e index.js.

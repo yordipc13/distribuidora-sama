@@ -61,11 +61,14 @@ const searchImagesButton = document.querySelector("#search-images");
 const skipImageButton = document.querySelector("#skip-image");
 const stopImageProcessButton = document.querySelector("#stop-image-process");
 const saveSelectedImagesButton = document.querySelector("#save-selected-images");
-const chooseImageFolderButton = document.querySelector("#choose-image-folder");
 const imageSelectionCount = document.querySelector("#image-selection-count");
 const imageResultsGrid = document.querySelector("#image-results-grid");
 const imageEmpty = document.querySelector("#image-empty");
 const imageStatus = document.querySelector("#image-status");
+const imageResultsArea = document.querySelector(".image-results-area");
+const imageUrlInput = document.querySelector("#image-url");
+const addImageUrlButton = document.querySelector("#add-image-url");
+const removeSelectedImagesButton = document.querySelector("#remove-selected-images");
 const catalogPanel = document.querySelector(".catalog-panel");
 const catalogHeading = document.querySelector("#catalog-heading");
 const statsBody = document.querySelector("#stats-body");
@@ -92,7 +95,7 @@ let imageProducts = [];
 let imageIndex = 0;
 let imageResults = [];
 let imageProcessStopped = false;
-let imageDirectoryHandle = null;
+let imageSearchWindow = null;
 const selectedProductSkus = new Set();
 const activityLogStorageKey = "sama-admin-product-activity";
 const activityLogLimit = 30;
@@ -255,6 +258,20 @@ for (const [viewKey, categoryNames] of Object.entries(productCategoryViews)) {
 
 let records = [];
 const selectedSearchFields = new Set();
+const productTranslations = new Map();
+const pendingTranslations = new Set();
+const failedTranslations = new Set();
+const translationQueue = [];
+const MAX_CONCURRENT_TRANSLATIONS = 2;
+let activeTranslations = 0;
+let translationObserver = null;
+
+const translatedProductFields = {
+  Producto: "name_en",
+  descripcion: "description_en",
+  Categoria: "category_en",
+  Subcategoria: "subcategory_en",
+};
 
 function normalizeHeader(value) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -472,15 +489,18 @@ function productFieldLabel(field) {
 }
 
 function openProductPreview(record) {
-  productPreviewTitle.textContent = record.Producto || record.Sku || t("product");
+  const productName = productValueFor(record, "Producto");
+  productPreviewDialog.dataset.sku = record.Sku;
+  productPreviewTitle.textContent = productName === "—" ? record.Sku || t("product") : productName;
   productPreviewDetails.replaceChildren();
   for (const [field, value] of Object.entries(record)) {
     const term = document.createElement("dt");
     const description = document.createElement("dd");
     term.textContent = productFieldLabel(field);
-    description.textContent = value === null || value === undefined || value === ""
+    const displayValue = translatedProductFields[field] ? productValueFor(record, field) : value;
+    description.textContent = displayValue === null || displayValue === undefined || displayValue === ""
       ? "—"
-      : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+      : typeof displayValue === "object" ? JSON.stringify(displayValue, null, 2) : String(displayValue);
     productPreviewDetails.append(term, description);
   }
 
@@ -489,7 +509,7 @@ function openProductPreview(record) {
   productPreviewImage.hidden = !imageUrl;
   productPreviewImageEmpty.hidden = Boolean(imageUrl);
   productPreviewImageEmpty.textContent = t("noProductImage");
-  productPreviewImage.alt = record.Producto || record.Sku || t("product");
+  productPreviewImage.alt = productPreviewTitle.textContent;
   productPreviewImage.onerror = () => {
     productPreviewImage.hidden = true;
     productPreviewImageEmpty.hidden = false;
@@ -497,7 +517,7 @@ function openProductPreview(record) {
   };
   if (imageUrl) productPreviewImage.src = imageUrl.trim();
   else productPreviewImage.removeAttribute("src");
-  productPreviewDialog.showModal();
+  if (!productPreviewDialog.open) productPreviewDialog.showModal();
 }
 
 function renderStatistics() {
@@ -735,18 +755,114 @@ async function imageWorkerDownloadRequest(body) {
 function renderImageResults() {
   imageResultsGrid.replaceChildren();
   imageEmpty.hidden = imageResults.length > 0;
+  const selectedCount = imageResults.filter(item => item.selected).length;
+  imageSelectionCount.textContent = `${selectedCount} seleccionadas`;
+  removeSelectedImagesButton.disabled = selectedCount === 0;
+  saveSelectedImagesButton.disabled = imageResults.length === 0;
   for (const [index, result] of imageResults.entries()) {
     const card = document.createElement("label");
     card.className = "image-result-card";
     card.innerHTML = `<input type="checkbox" data-image-index="${index}" ${result.selected ? "checked" : ""}><img src="${escapeHtml(result.thumbnailUrl || result.imageUrl)}" alt="${escapeHtml(result.title)}"><strong>${escapeHtml(result.title || "Imagen")}</strong><small>${escapeHtml(result.sourcePageUrl || "Origen no disponible")}</small>`;
     card.querySelector("input").addEventListener("change", event => {
       result.selected = event.currentTarget.checked;
-      const selectedCount = imageResults.filter(item => item.selected).length;
-      imageSelectionCount.textContent = `${selectedCount} seleccionadas`;
-      saveSelectedImagesButton.disabled = selectedCount === 0;
+      renderImageResults();
     });
     imageResultsGrid.append(card);
   }
+}
+
+function isDirectImageUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return /^https?:$/i.test(url.protocol) && !/\/(imgres|search)\?/i.test(url.pathname + url.search);
+  } catch {
+    return false;
+  }
+}
+
+function addImageResult(result) {
+  const imageUrl = String(result.imageUrl || "").trim();
+  if (!imageUrl || imageResults.some(item => item.imageUrl === imageUrl)) return false;
+  imageResults.push({ ...result, imageUrl, selected: false });
+  renderImageResults();
+  return true;
+}
+
+function addManualImageUrl() {
+  const imageUrl = imageUrlInput.value.trim();
+  if (!isDirectImageUrl(imageUrl)) {
+    imageStatus.textContent = "Introduce una URL directa válida de imagen.";
+    return;
+  }
+  addImageResult({
+    imageUrl,
+    thumbnailUrl: imageUrl,
+    title: "Imagen agregada manualmente",
+    sourcePageUrl: imageUrl,
+  });
+  imageUrlInput.value = "";
+  imageStatus.textContent = "Imagen agregada.";
+}
+
+function getDroppedImageUrl(dataTransfer) {
+  const uri = dataTransfer.getData("text/uri-list")
+    .split(/\r?\n/)
+    .find(value => value && !value.startsWith("#"));
+  if (isDirectImageUrl(uri)) return uri.trim();
+  const text = dataTransfer.getData("text/plain").trim();
+  if (isDirectImageUrl(text)) return text;
+  const html = dataTransfer.getData("text/html");
+  if (html) {
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    const imageUrl = parsed.querySelector("img")?.src || parsed.querySelector("a")?.href || "";
+    if (isDirectImageUrl(imageUrl)) return imageUrl;
+  }
+  return "";
+}
+
+function addDroppedImages(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  imageResultsArea.classList.remove("is-dragging");
+  imageResultsGrid.classList.remove("is-dragging");
+  const files = [...(event.dataTransfer?.files || [])]
+    .filter(file => file.type.startsWith("image/"));
+  for (const file of files) {
+    const previewUrl = URL.createObjectURL(file);
+    addImageResult({
+      file,
+      imageUrl: previewUrl,
+      thumbnailUrl: previewUrl,
+      title: file.name,
+      sourcePageUrl: "Archivo arrastrado",
+    });
+  }
+  if (!files.length) {
+    const imageUrl = getDroppedImageUrl(event.dataTransfer);
+    if (imageUrl) {
+      addImageResult({
+        imageUrl,
+        thumbnailUrl: imageUrl,
+        title: "Imagen arrastrada",
+        sourcePageUrl: imageUrl,
+      });
+    }
+  }
+  if (imageResults.length) {
+    imageStatus.textContent = `${imageResults.length} imagen(es) listas para guardar.`;
+  }
+}
+
+function removeSelectedImages() {
+  const removed = imageResults.filter(item => item.selected);
+  removed.forEach(image => {
+    if (image.imageUrl.startsWith("blob:")) URL.revokeObjectURL(image.imageUrl);
+  });
+  imageResults = imageResults.filter(item => !item.selected);
+  renderImageResults();
+  imageStatus.textContent = removed.length
+    ? `${removed.length} imagen(es) eliminada(s).`
+    : "No hay imágenes seleccionadas.";
 }
 
 async function loadImageProducts() {
@@ -783,68 +899,80 @@ async function searchCurrentProductImages() {
   if (!product) return;
   const query = imageQuery.value.trim() || product.Producto;
   const searchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
-  const searchWindow = window.open(
+  imageSearchWindow = window.open(
     searchUrl,
     "sama-image-search",
     "popup,width=1100,height=850,left=500,top=80",
   );
-  if (!searchWindow) {
+  if (!imageSearchWindow) {
     imageStatus.textContent = "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.";
     return;
   }
-  searchWindow.focus();
+  imageSearchWindow.focus();
   imageStatus.textContent = "Google Imágenes abierto. Arrastra o pega las imágenes aquí.";
 }
 
-async function chooseImageFolder() {
-  if (!window.showDirectoryPicker) {
-    imageStatus.textContent = "Tu navegador no permite elegir una carpeta. Las imágenes se descargarán normalmente.";
+function imageFileData(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(new Error("No se pudo preparar la imagen arrastrada.")));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function savePrimaryImagePath(sku, imagePath) {
+  const { error } = await client
+    .from("products")
+    .update({ "Image(url)": imagePath })
+    .eq("Sku", sku);
+  if (error) throw error;
+}
+
+function openNextImageSearch() {
+  const product = imageProducts[imageIndex];
+  if (!product) return;
+  const query = imageQuery.value.trim() || product.Producto;
+  const searchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
+  if (imageSearchWindow && !imageSearchWindow.closed) {
+    imageSearchWindow.location.href = searchUrl;
+    imageSearchWindow.focus();
     return;
   }
-  imageDirectoryHandle = await window.showDirectoryPicker({ mode: "readwrite", startIn: "downloads" });
-  imageStatus.textContent = "Carpeta seleccionada. Las imágenes se guardarán allí.";
-}
-
-function imageExtension(contentType) {
-  return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" })[contentType] || "jpg";
-}
-
-async function downloadImageBlob(image, filename) {
-  const response = await imageWorkerDownloadRequest({ action: "download", imageUrl: image.imageUrl, filename });
-  return {
-    blob: await response.blob(),
-    contentType: response.headers.get("content-type") || "image/jpeg",
-  };
+  imageSearchWindow = window.open(
+    searchUrl,
+    "sama-image-search",
+    "popup,width=1100,height=850,left=500,top=80",
+  );
+  if (imageSearchWindow) imageSearchWindow.focus();
 }
 
 async function saveCurrentProductImages() {
   const product = imageProducts[imageIndex];
-  const selected = imageResults.filter(item => item.selected);
+  const selected = imageResults;
   if (!product || !selected.length) return;
   saveSelectedImagesButton.disabled = true;
-  imageStatus.textContent = "Descargando imágenes...";
+  imageStatus.textContent = "Subiendo imágenes a Cloudflare...";
   try {
-    for (const [index, image] of selected.entries()) {
-      const downloaded = await downloadImageBlob(image, `${product.Sku}-${index === 0 ? "primary" : `secondary-${String(index).padStart(2, "0")}`}`);
-      const filename = `${product.Sku}-${index === 0 ? "primary" : `secondary-${String(index).padStart(2, "0")}`}.${imageExtension(downloaded.contentType)}`;
-      if (imageDirectoryHandle) {
-        const fileHandle = await imageDirectoryHandle.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(downloaded.blob);
-        await writable.close();
-      } else {
-        const url = URL.createObjectURL(downloaded.blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        link.click();
-        URL.revokeObjectURL(url);
-      }
+    const images = [];
+    for (const image of selected) {
+      images.push({
+        imageUrl: image.file ? "" : image.imageUrl,
+        imageData: image.file ? await imageFileData(image.file) : "",
+        contentType: image.file?.type || "",
+        sourcePageUrl: image.sourcePageUrl || "",
+      });
     }
-    imageStatus.textContent = `${selected.length} imagen(es) descargada(s) en Galería.`;
+    const payload = await imageWorkerRequest({ action: "save", sku: product.Sku, images });
+    const saved = Array.isArray(payload.saved) ? payload.saved : [];
+    const primary = saved.find(image => image.isPrimary) || saved[0];
+    if (!primary?.imageUrl) throw new Error("Cloudflare no devolvió la URL de la imagen principal.");
+    await savePrimaryImagePath(product.Sku, primary.imageUrl);
+    imageStatus.textContent = `${saved.length} imagen(es) subida(s) a Cloudflare.`;
     imageProducts.splice(imageIndex, 1);
     if (imageIndex >= imageProducts.length) imageIndex = Math.max(0, imageProducts.length - 1);
     renderCurrentImageProduct();
+    openNextImageSearch();
   } catch (error) {
     imageStatus.textContent = `Error: ${error.message}`;
     saveSelectedImagesButton.disabled = false;
@@ -863,6 +991,76 @@ function valueFor(record, field) {
   if (value && typeof value === "object") return value.name || "—";
   if (typeof value === "boolean") return value ? t("yes") : t("no");
   return value == null || value === "" ? "—" : String(value);
+}
+
+function translationMatchesProduct(translation, product) {
+  return translation?.source_name === String(product.Producto || "").trim()
+    && translation.source_description === String(product.descripcion || "").trim()
+    && translation.source_category === String(product.Categoria ?? "Sin categoría").trim()
+    && translation.source_subcategory === String(product.Subcategoria || "").trim();
+}
+
+function productValueFor(record, field) {
+  const translationField = translatedProductFields[field];
+  const translation = productTranslations.get(record.Sku);
+  if (language === "en" && translationField && translationMatchesProduct(translation, record)) {
+    const translatedValue = translation[translationField];
+    if (translatedValue) return translatedValue;
+  }
+  return valueFor(record, field);
+}
+
+async function loadProductTranslations() {
+  try {
+    const { data, error } = await client.from("product_translations")
+      .select("sku,name_en,description_en,category_en,subcategory_en,source_name,source_description,source_category,source_subcategory");
+    if (error) return;
+    for (const translation of data || []) {
+      const product = records.find(entry => entry.Sku === translation.sku);
+      if (product && translationMatchesProduct(translation, product)) {
+        productTranslations.set(translation.sku, translation);
+      }
+    }
+  } catch {
+    // Keep the catalog usable when product translations are not configured.
+  }
+}
+
+function translateProduct(product) {
+  if (language !== "en" || !window.SAMA_TRANSLATION_WORKER_URL
+    || translationMatchesProduct(productTranslations.get(product.Sku), product)
+    || pendingTranslations.has(product.Sku) || failedTranslations.has(product.Sku)) return;
+  pendingTranslations.add(product.Sku);
+  translationQueue.push(product);
+  processTranslationQueue();
+}
+
+function processTranslationQueue() {
+  while (activeTranslations < MAX_CONCURRENT_TRANSLATIONS && translationQueue.length) {
+    const product = translationQueue.shift();
+    activeTranslations += 1;
+    fetch(window.SAMA_TRANSLATION_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sku: product.Sku }),
+    })
+      .then(async response => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `Translation failed with HTTP ${response.status}.`);
+        if (!translationMatchesProduct(payload, product)) throw new Error("The product changed while it was being translated.");
+        productTranslations.set(product.Sku, payload);
+        render();
+        if (productPreviewDialog.open && productPreviewDialog.dataset.sku === product.Sku) {
+          openProductPreview(product);
+        }
+      })
+      .catch(() => failedTranslations.add(product.Sku))
+      .finally(() => {
+        pendingTranslations.delete(product.Sku);
+        activeTranslations -= 1;
+        processTranslationQueue();
+      });
+  }
 }
 
 function categoryViewKey(categoryName) {
@@ -899,6 +1097,8 @@ function addDiscoveredCategoryViews() {
 }
 
 function render() {
+  translationObserver?.disconnect();
+  translationObserver = null;
   const view = views[viewSelect.value];
   const query = searchInput.value.trim().toLocaleLowerCase("es");
   const searchFields = selectedSearchFields.size
@@ -906,7 +1106,7 @@ function render() {
     : view.columns.map(([field]) => field);
   const filtered = records.filter(record => {
     const globalMatch = !query || searchFields.some(field =>
-      valueFor(record, field).toLocaleLowerCase("es").includes(query),
+      productValueFor(record, field).toLocaleLowerCase(language === "en" ? "en" : "es").includes(query),
     );
     return globalMatch;
   });
@@ -940,6 +1140,7 @@ function render() {
   }
   tableHead.append(headerRow);
 
+  let translationFallbackCount = 0;
   for (const record of filtered) {
     const row = document.createElement("tr");
     row.dataset.sku = record.Sku;
@@ -961,10 +1162,26 @@ function render() {
     });
     for (const [field] of view.columns) {
       const cell = document.createElement("td");
-      cell.textContent = valueFor(record, field);
+      cell.textContent = productValueFor(record, field);
       row.append(cell);
     }
     tableBody.append(row);
+    if (language === "en") {
+      if ("IntersectionObserver" in window) {
+        translationObserver ||= new IntersectionObserver(entries => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            translationObserver.unobserve(entry.target);
+            const product = records.find(item => item.Sku === entry.target.dataset.sku);
+            if (product) translateProduct(product);
+          }
+        }, { rootMargin: "200px 0px" });
+        translationObserver.observe(row);
+      } else if (translationFallbackCount < 4) {
+        translationFallbackCount += 1;
+        translateProduct(record);
+      }
+    }
   }
 
   emptyState.hidden = filtered.length > 0;
@@ -1091,6 +1308,7 @@ async function loadView() {
     const { data, error } = await views[viewSelect.value].load();
     if (error) throw error;
     records = data || [];
+    await loadProductTranslations();
     if (viewSelect.value === "products") addDiscoveredCategoryViews();
     statusElement.textContent = t("connected");
     statusElement.dataset.state = "connected";
@@ -1259,15 +1477,38 @@ imageQuery.addEventListener("keydown", event => {
   }
 });
 saveSelectedImagesButton.addEventListener("click", saveCurrentProductImages);
-chooseImageFolderButton.addEventListener("click", () => {
-  chooseImageFolder().catch(error => {
-    imageStatus.textContent = `No se pudo seleccionar la carpeta: ${error.message}`;
-  });
-});
 skipImageButton.addEventListener("click", skipCurrentImageProduct);
 stopImageProcessButton.addEventListener("click", () => {
   imageProcessStopped = true;
   imageStatus.textContent = "Proceso detenido.";
+});
+addImageUrlButton.addEventListener("click", addManualImageUrl);
+removeSelectedImagesButton.addEventListener("click", removeSelectedImages);
+const highlightImageDropZone = event => {
+  event.preventDefault();
+  event.stopPropagation();
+  imageResultsArea.classList.add("is-dragging");
+  imageResultsGrid.classList.add("is-dragging");
+};
+imageResultsArea.addEventListener("dragenter", highlightImageDropZone);
+imageResultsArea.addEventListener("dragover", highlightImageDropZone);
+imageResultsArea.addEventListener("dragleave", event => {
+  if (!imageResultsArea.contains(event.relatedTarget)) {
+    imageResultsArea.classList.remove("is-dragging");
+    imageResultsGrid.classList.remove("is-dragging");
+  }
+});
+imageResultsArea.addEventListener("drop", addDroppedImages);
+imageUrlInput.addEventListener("dragover", event => {
+  event.preventDefault();
+  event.stopPropagation();
+});
+imageUrlInput.addEventListener("drop", addDroppedImages);
+imageUrlInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addManualImageUrl();
+  }
 });
 importInput.addEventListener("change", async event => {
   const [file] = event.currentTarget.files;

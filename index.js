@@ -127,11 +127,14 @@ let authMode = "signin";
 let authMessage = "";
 let categories = [];
 
+const savedLanguage = localStorage.getItem("sama-language");
 const state = {
 	query: "",
 	category: "Todos",
 	subcategory: "",
-	language: navigator.language?.toLowerCase().startsWith("en") ? "en" : "es",
+	language: savedLanguage === "en" || savedLanguage === "es"
+		? savedLanguage
+		: navigator.language?.toLowerCase().startsWith("en") ? "en" : "es",
 	theme: systemTheme.matches ? "dark" : "light",
 	cart: JSON.parse(localStorage.getItem("sama-cart") || "[]"),
 	favorites: JSON.parse(localStorage.getItem("sama-favorites") || "[]"),
@@ -382,7 +385,7 @@ function render() {
 			<section class="info-band"><div class="info-items"><div class="info-item"><b>${t("attention")}</b><span>${t("helpChoose")}</span></div><div class="info-item"><b>${t("businessCatalog")}</b><span>${t("bulkSolutions")}</span></div><div class="info-item"><b>${t("noCommitment")}</b><span>${t("quoteWhatsapp")}</span></div></div></section>
 		</main>
 		<footer><div class="footer-grid"><div><h3>SAMA</h3><p>${t("footerAbout")}</p></div><div><h3>${t("links")}</h3><p><a href="#catalog">${t("catalog")}</a><br><a href="#categorias">${t("categories")}</a><br><a href="#faq">${t("faq")}</a></p></div><div><h3>${t("contact")}</h3><p>${t("whatsapp")}: ${t("contactPending")}<br>Email: ${t("contactPending")}<br>${t("schedule")}</p></div></div></footer>
-		<nav class="mobile-nav"><button data-scroll-products><strong>⌂</strong>${t("store")}</button><button data-favorites><strong>♡</strong>${t("favorites")}</button><button data-cart><strong>▱</strong>${t("quote")} (${cartUnitCount()})</button><button data-account><strong>♙</strong>${t("account")}</button></nav><a class="whatsapp" href="https://wa.me/" target="_blank" rel="noreferrer" aria-label="${t("contactWhatsApp")}"><img src="./Logo y Banner/Logo.jpg" alt="" onerror="this.hidden=true"><span>${t("whatsapp")}</span></a><div class="toast" id="toast"></div><div class="modal-backdrop" id="modal"></div>`;
+		<nav class="mobile-nav"><button data-scroll-products><strong>⌂</strong>${t("store")}</button><button data-favorites><strong>♡</strong>${t("favorites")}</button><button data-cart><strong>▱</strong>${t("quote")} (${cartUnitCount()})</button><button data-account><strong>♙</strong>${t("account")}</button></nav><a class="whatsapp" href="https://wa.me/" target="_blank" rel="noreferrer" aria-label="${t("contactWhatsApp")}"><img src="./Logo y Banner/whatsapp_logo.png" alt="" onerror="this.hidden=true"><span>${t("whatsapp")}</span></a><div class="toast" id="toast"></div><div class="modal-backdrop" id="modal"></div>`;
 	bindEvents();
 	observeProductTranslations();
 }
@@ -917,7 +920,11 @@ function bindEvents() {
 	document.querySelectorAll("[data-hero-step]").forEach(button => button.addEventListener("click", () => { setHeroSlide(activeHeroSlide + Number(button.dataset.heroStep)); syncHeroAutoplay(); }));
 	document.querySelectorAll("[data-hero-indicator]").forEach(button => button.addEventListener("click", () => { setHeroSlide(Number(button.dataset.heroIndicator)); syncHeroAutoplay(); }));
 	syncHeroAutoplay();
-	document.querySelector("#language-toggle").addEventListener("click", () => { state.language = state.language === "es" ? "en" : "es"; render(); });
+	document.querySelector("#language-toggle").addEventListener("click", () => {
+		state.language = state.language === "es" ? "en" : "es";
+		localStorage.setItem("sama-language", state.language);
+		render();
+	});
 	document.querySelector("[data-theme-toggle]").addEventListener("click", () => { manualTheme = true; applyTheme(state.theme === "dark" ? "light" : "dark"); render(); });
 	document.querySelector("#search-form").addEventListener("submit", e => { e.preventDefault(); state.query = document.querySelector("#search-input").value.trim(); categoryMenuOpen = false; render(); document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" }); });
 	document.querySelectorAll("[data-category]").forEach(el => {
