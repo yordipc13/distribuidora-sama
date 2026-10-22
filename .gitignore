@@ -1,2 +1,6 @@
 # Worker independiente, con su propio repositorio Git
 /cloudflare-worker/
+/images-worker/
+/Galeria/*
+!/Galeria/.gitignore
+!/Galeria/.gitkeep

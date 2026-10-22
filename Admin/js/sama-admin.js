@@ -9,6 +9,12 @@ const emptyTitle = document.querySelector("#empty-title");
 const emptyMessage = document.querySelector("#empty-message");
 const viewLabel = document.querySelector("#view-label");
 const resultCount = document.querySelector("#result-count");
+const activityLogList = document.querySelector("#activity-log-list");
+const activityLogEmpty = document.querySelector("#activity-log-empty");
+const activityLogButton = document.querySelector("#open-activity-log");
+const activityLogCount = document.querySelector("#activity-log-count");
+const activityLogDialog = document.querySelector("#activity-log-dialog");
+const closeActivityLogButton = document.querySelector("#close-activity-log");
 const refreshButton = document.querySelector("#refresh-catalog");
 const filterHint = document.querySelector("#filter-hint");
 const languageSelect = document.querySelector("#admin-language");
@@ -21,10 +27,16 @@ const addProductButton = document.querySelector("#add-product");
 const deleteMenuButton = document.querySelector("#delete-menu-button");
 const deleteMenu = document.querySelector("#delete-menu");
 const productDialog = document.querySelector("#product-dialog");
+const productPreviewDialog = document.querySelector("#product-preview-dialog");
+const productPreviewTitle = document.querySelector("#product-preview-title");
+const productPreviewImage = document.querySelector("#product-preview-image");
+const productPreviewImageEmpty = document.querySelector("#product-preview-image-empty");
+const productPreviewDetails = document.querySelector("#product-preview-details");
 const productForm = document.querySelector("#product-form");
 const productDialogTitle = document.querySelector("#product-dialog-title");
 const productDialogError = document.querySelector("#product-dialog-error");
 const cancelProductButton = document.querySelector("#cancel-product");
+const closeProductPreviewButton = document.querySelector("#close-product-preview");
 const productContextMenu = document.querySelector("#product-context-menu");
 const categoryDeleteDialog = document.querySelector("#category-delete-dialog");
 const categoryDeleteForm = document.querySelector("#category-delete-form");
@@ -40,6 +52,20 @@ const authMessage = document.querySelector("#auth-message");
 const menuToggle = document.querySelector("#menu-toggle");
 const adminNavigation = document.querySelector("#admin-navigation");
 const statisticsPanel = document.querySelector("#statistics-panel");
+const imagesPanel = document.querySelector("#images-panel");
+const imageProgress = document.querySelector("#image-progress");
+const imageProductName = document.querySelector("#image-product-name");
+const imageProductSku = document.querySelector("#image-product-sku");
+const imageQuery = document.querySelector("#image-query");
+const searchImagesButton = document.querySelector("#search-images");
+const skipImageButton = document.querySelector("#skip-image");
+const stopImageProcessButton = document.querySelector("#stop-image-process");
+const saveSelectedImagesButton = document.querySelector("#save-selected-images");
+const chooseImageFolderButton = document.querySelector("#choose-image-folder");
+const imageSelectionCount = document.querySelector("#image-selection-count");
+const imageResultsGrid = document.querySelector("#image-results-grid");
+const imageEmpty = document.querySelector("#image-empty");
+const imageStatus = document.querySelector("#image-status");
 const catalogPanel = document.querySelector(".catalog-panel");
 const catalogHeading = document.querySelector("#catalog-heading");
 const statsBody = document.querySelector("#stats-body");
@@ -62,14 +88,22 @@ let individualTimerStoppedAt = 0;
 let totalTimerInterval = null;
 let statistics = { total: 0, completed: 0, failures: 0, rows: [] };
 let generationController = null;
+let imageProducts = [];
+let imageIndex = 0;
+let imageResults = [];
+let imageProcessStopped = false;
+let imageDirectoryHandle = null;
 const selectedProductSkus = new Set();
+const activityLogStorageKey = "sama-admin-product-activity";
+const activityLogLimit = 30;
+let activityLogEntries = loadActivityLog();
 let editingProductSku = null;
 
 const translations = {
   es: {
     title: "Administración de catálogo | SAMA", refresh: "Actualizar", backToCatalog: "Volver al catálogo",
     catalog: "CATÁLOGO", catalogAria: "Catálogo de SAMA", adminTitle: "Administración SAMA", adminDescription: "Consulta productos, categorías y marcas activas.",
-    readOnly: "Consulta e importación", importExcel: "Importar Excel", generateDescriptions: "Generar descripciones", addProduct: "Agregar", delete: "Borrar", deleteSelected: "Borrar seleccionados", deleteCategory: "Borrar categoría actual", deleteCategoryTitle: "Borrar categoría", deleteCategoryDescription: "Selecciona la categoría cuyos productos deseas borrar.", selectCategory: "Selecciona una categoría", deleteDescriptions: "Borrar todas las descripciones", deleteAll: "Borrar todos los productos", deleteOne: "Borrar producto", edit: "Editar", save: "Guardar", cancel: "Cancelar", cancelGeneration: "Cancelar generación", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", canceled: "Cancelado", sequence: "#", individualTime: "Tiempo individual", generatedDescription: "Descripción generada", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
+    readOnly: "Consulta e importación", importExcel: "Importar Excel", generateDescriptions: "Generar descripciones", addProduct: "Agregar", delete: "Borrar", deleteSelected: "Borrar seleccionados", deleteCategory: "Borrar categoría actual", deleteCategoryTitle: "Borrar categoría", deleteCategoryDescription: "Selecciona la categoría cuyos productos deseas borrar.", selectCategory: "Selecciona una categoría", deleteDescriptions: "Borrar todas las descripciones", deleteAll: "Borrar todos los productos", deleteOne: "Borrar producto", edit: "Editar", save: "Guardar", cancel: "Cancelar", cancelGeneration: "Cancelar generación", signOut: "Cerrar sesión", menu: "Menú", catalogTab: "Catálogo", statisticsTab: "Estadísticas", imagesTab: "Imágenes", imagesEyebrow: "IMÁGENES", imagesTitle: "Buscador asistido de imágenes", imagesDescription: "Selecciona imágenes para productos que todavía no tienen una.", pendingImage: "PENDIENTE", imageSearchPlaceholder: "Buscar imágenes...", searchImages: "Buscar imágenes", skipImage: "Omitir", stopImages: "Detener", chooseImageFolder: "Elegir carpeta Galería", downloadImages: "Descargar seleccionadas", saveImages: "Descargar seleccionadas", noImageResults: "Busca imágenes para comenzar", imageResultsHint: "Las imágenes solo se guardan después de tu selección.", statisticsEyebrow: "SEGUIMIENTO", statisticsTitle: "Estadísticas de generación", statisticsDescription: "Consulta el tiempo total y el tiempo empleado en cada producto.", totalTime: "Tiempo total", individualTimer: "Temporizador individual", completedProducts: "Productos procesados", notStarted: "Sin iniciar", running: "En progreso", finished: "Finalizado", canceled: "Cancelado", sequence: "#", individualTime: "Tiempo individual", generatedDescription: "Descripción generada", noStatistics: "Aún no hay estadísticas", statisticsHint: "Inicia una importación para registrar tiempos", success: "Completado", failure: "Error", errors: "errores", adminAccess: "ACCESO ADMINISTRADOR", signInTitle: "Iniciar sesión", signInDescription: "Accede para consultar e importar productos.", email: "Correo", password: "Contraseña", signIn: "Iniciar sesión", recordType: "Tipo de registro", products: "Productos", cleaning: "Limpieza", office: "Oficina", pharmacy: "Farmacia", appliances: "Electrodomésticos", covid19: "Covid-19",
     footerTitle: "SAMA · Catálogo", footerData: "Datos activos de Supabase", searchPlaceholder: "Buscar en el catálogo...",
     results: "registros", result: "registro",     loading: "Conectando a Supabase...", connected: "Conectado a Supabase", generatingDescriptions: "Generando descripciones:",
     clientUnavailable: "Cliente de Supabase no disponible", connectionError: "Error de conexión: {message}", authError: "No se pudo iniciar sesión: {message}", notAdmin: "La cuenta no tiene permisos de administrador.",
@@ -83,7 +117,7 @@ const translations = {
   en: {
     title: "Catalog administration | SAMA", refresh: "Refresh", backToCatalog: "Back to catalog",
     catalog: "CATALOG", catalogAria: "SAMA catalog", adminTitle: "SAMA administration", adminDescription: "View active products, categories, and brands.",
-    readOnly: "View and import", importExcel: "Import Excel", generateDescriptions: "Generate descriptions", addProduct: "Add", delete: "Delete", deleteSelected: "Delete selected", deleteCategory: "Delete current category", deleteCategoryTitle: "Delete category", deleteCategoryDescription: "Select the category whose products you want to delete.", selectCategory: "Select a category", deleteDescriptions: "Delete all descriptions", deleteAll: "Delete all products", deleteOne: "Delete product", edit: "Edit", save: "Save", cancel: "Cancel", cancelGeneration: "Cancel generation", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", canceled: "Canceled", sequence: "#", individualTime: "Individual time", generatedDescription: "Generated description", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
+    readOnly: "View and import", importExcel: "Import Excel", generateDescriptions: "Generate descriptions", addProduct: "Add", delete: "Delete", deleteSelected: "Delete selected", deleteCategory: "Delete category", deleteCategoryTitle: "Delete category", deleteCategoryDescription: "Select the category whose products you want to delete.", selectCategory: "Select a category", deleteDescriptions: "Delete all descriptions", deleteAll: "Delete all products", deleteOne: "Delete product", edit: "Edit", save: "Save", cancel: "Cancel", cancelGeneration: "Cancel generation", signOut: "Sign out", menu: "Menu", catalogTab: "Catalog", statisticsTab: "Statistics", imagesTab: "Images", imagesEyebrow: "IMAGES", imagesTitle: "Assisted image search", imagesDescription: "Select images for products that do not have one yet.", pendingImage: "PENDING", imageSearchPlaceholder: "Search images...", searchImages: "Search images", skipImage: "Skip", stopImages: "Stop", chooseImageFolder: "Choose Gallery folder", downloadImages: "Download selected", saveImages: "Download selected", noImageResults: "Search images to begin", imageResultsHint: "Images are saved only after your selection.", statisticsEyebrow: "TRACKING", statisticsTitle: "Generation statistics", statisticsDescription: "Review total time and time spent on each product.", totalTime: "Total time", individualTimer: "Individual timer", completedProducts: "Products processed", notStarted: "Not started", running: "In progress", finished: "Finished", canceled: "Canceled", sequence: "#", individualTime: "Individual time", generatedDescription: "Generated description", noStatistics: "No statistics yet", statisticsHint: "Start an import to record timings", success: "Completed", failure: "Error", errors: "errors", adminAccess: "ADMIN ACCESS", signInTitle: "Sign in", signInDescription: "Sign in to view and import products.", email: "Email", password: "Password", signIn: "Sign in", recordType: "Record type", products: "Products", cleaning: "Cleaning", office: "Office", pharmacy: "Pharmacy", appliances: "Appliances", covid19: "Covid-19",
     footerTitle: "SAMA · Catalog", footerData: "Active Supabase data", searchPlaceholder: "Search the catalog...",
     results: "records", result: "record",     loading: "Connecting to Supabase...", connected: "Connected to Supabase", generatingDescriptions: "Generating descriptions:",
     clientUnavailable: "Supabase client unavailable", connectionError: "Connection error: {message}", authError: "Could not sign in: {message}", notAdmin: "This account does not have administrator permissions.",
@@ -95,6 +129,23 @@ const translations = {
     yes: "Yes", no: "No", switchToDark: "Switch to dark mode", switchToLight: "Switch to light mode", language: "Language",
   },
 };
+
+Object.assign(translations.es, { close: "Cerrar", productDetails: "Detalle del producto", noProductImage: "Sin imagen disponible", productImageError: "No se pudo cargar la imagen" });
+Object.assign(translations.en, { close: "Close", productDetails: "Product details", noProductImage: "No image available", productImageError: "Could not load image" });
+Object.assign(translations.es, {
+  activityLogButton: "Cambios", activityLogButtonAria: "Ver cambios recientes ({count})",
+  activityLogTitle: "Cambios recientes", activityLogNote: "Registro guardado en este navegador",
+  activityLogEmpty: "Todavía no hay cambios registrados.", activityAdded: "Añadido",
+  activityUpdated: "Actualizado", activityOutOfStock: "Agotado", activityRemoved: "Retirado",
+  activityAddedDetails: "Producto añadido al catálogo", activityRemovedDetails: "Producto retirado del catálogo",
+});
+Object.assign(translations.en, {
+  activityLogButton: "Changes", activityLogButtonAria: "View recent changes ({count})",
+  activityLogTitle: "Recent changes", activityLogNote: "History saved in this browser",
+  activityLogEmpty: "No changes have been recorded yet.", activityAdded: "Added",
+  activityUpdated: "Updated", activityOutOfStock: "Out of stock", activityRemoved: "Removed",
+  activityAddedDetails: "Product added to catalog", activityRemovedDetails: "Product removed from catalog",
+});
 
 function t(key, values = {}) {
   let message = translations[language][key] ?? translations.es[key] ?? key;
@@ -110,6 +161,7 @@ function applyLanguage() {
     element.textContent = t(element.dataset.i18n);
   });
   searchInput.placeholder = t("searchPlaceholder");
+  imageQuery.placeholder = t("imageSearchPlaceholder");
   languageSelect.setAttribute("aria-label", t("language"));
   document.querySelector(".catalog-panel").setAttribute("aria-label", t("catalogAria"));
   if (statusElement.dataset.state === "connected") statusElement.textContent = t("connected");
@@ -118,6 +170,7 @@ function applyLanguage() {
     statusElement.textContent = client ? t("connectionError", { message: connectionError }) : t("clientUnavailable");
   }
   render();
+  renderActivityLog();
 }
 
 function applyTheme(theme) {
@@ -262,19 +315,21 @@ function reserveUniqueSlug(baseSlug, sku, takenSlugs) {
 }
 
 async function loadProductSlugs() {
-  const { data, error } = await client.from("products").select("Sku,slug,descripcion");
+  const { data, error } = await client.from("products").select("*");
   if (error) throw error;
   const bySku = new Map();
   const descriptionsBySku = new Map();
+  const productsBySku = new Map();
   const takenSlugs = new Map();
   for (const record of data || []) {
     const sku = String(record.Sku ?? "").trim();
     const slug = String(record.slug ?? "").trim();
     if (sku) bySku.set(sku, slug);
     if (sku) descriptionsBySku.set(sku, record.descripcion ?? null);
+    if (sku) productsBySku.set(sku, record);
     if (slug) takenSlugs.set(slug, sku);
   }
-  return { bySku, descriptionsBySku, takenSlugs };
+  return { bySku, descriptionsBySku, productsBySku, takenSlugs };
 }
 
 function toStock(value) {
@@ -318,6 +373,131 @@ function escapeHtml(value) {
     '"': "&quot;",
     "'": "&#39;",
   }[character]));
+}
+
+function loadActivityLog() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(activityLogStorageKey) || "[]");
+    return Array.isArray(saved) ? saved.slice(0, activityLogLimit) : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderActivityLog() {
+  activityLogList.replaceChildren();
+  activityLogCount.textContent = String(activityLogEntries.length);
+  activityLogButton.setAttribute("aria-label", t("activityLogButtonAria", { count: activityLogEntries.length }));
+  activityLogEmpty.hidden = activityLogEntries.length > 0;
+  for (const entry of activityLogEntries) {
+    const item = document.createElement("li");
+    item.className = `activity-log-item is-${entry.type}`;
+    const label = document.createElement("span");
+    label.className = "activity-log-type";
+    label.textContent = t({ added: "activityAdded", updated: "activityUpdated", outOfStock: "activityOutOfStock", removed: "activityRemoved" }[entry.type] || "activityUpdated");
+    const content = document.createElement("div");
+    content.className = "activity-log-content";
+    const title = document.createElement("strong");
+    title.textContent = entry.product || entry.sku || t("product");
+    const details = document.createElement("p");
+    details.textContent = `${entry.sku ? `${entry.sku} · ` : ""}${entry.details}`;
+    const timestamp = document.createElement("time");
+    timestamp.dateTime = entry.createdAt;
+    timestamp.textContent = new Date(entry.createdAt).toLocaleString(language === "en" ? "en" : "es", { dateStyle: "short", timeStyle: "short" });
+    content.append(title, details);
+    item.append(label, content, timestamp);
+    activityLogList.append(item);
+  }
+}
+
+function saveActivityLog(entry) {
+  activityLogEntries.unshift({ ...entry, createdAt: new Date().toISOString() });
+  activityLogEntries = activityLogEntries.slice(0, activityLogLimit);
+  try {
+    window.localStorage.setItem(activityLogStorageKey, JSON.stringify(activityLogEntries));
+  } catch {
+    // Keep the current-page history if browser storage is unavailable.
+  }
+  renderActivityLog();
+}
+
+function activityValue(field, value) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (field === "is_active") return value ? t("yes") : t("no");
+  const text = String(value);
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function logProductChange(previous, next) {
+  const sku = next.Sku || previous?.Sku || "";
+  const product = next.Producto || previous?.Producto || sku;
+  if (!previous) {
+    saveActivityLog({ type: "added", sku, product, details: t("activityAddedDetails") });
+    return;
+  }
+
+  const fields = [
+    ["Producto", t("product")], ["Categoria", t("category")], ["Subcategoria", t("subcategory")],
+    ["descripcion", t("description")], ["Image(url)", t("image")], ["stock", t("stock")],
+    ["is_active", language === "es" ? "Activo" : "Active"],
+  ];
+  const changes = fields.filter(([field]) => String(previous[field] ?? "") !== String(next[field] ?? ""));
+  if (!changes.length) return;
+
+  const stockOut = Number(previous.stock) > 0 && Number(next.stock) === 0;
+  saveActivityLog({
+    type: stockOut ? "outOfStock" : "updated",
+    sku,
+    product,
+    details: changes.map(([field, label]) => `${label}: ${activityValue(field, previous[field])} -> ${activityValue(field, next[field])}`).join("; "),
+  });
+}
+
+function logProductRemoval(record) {
+  saveActivityLog({
+    type: "removed",
+    sku: record.Sku || "",
+    product: record.Producto || record.Sku || "",
+    details: t("activityRemovedDetails"),
+  });
+}
+
+function productFieldLabel(field) {
+  const labels = {
+    Sku: t("sku"), Producto: t("product"), Categoria: t("category"), Marca: t("brand"),
+    Subcategoria: t("subcategory"), descripcion: t("description"), "Image(url)": t("image"),
+    stock: t("stock"), is_active: language === "es" ? "Activo" : "Active", slug: t("slug"),
+  };
+  return labels[field] || field;
+}
+
+function openProductPreview(record) {
+  productPreviewTitle.textContent = record.Producto || record.Sku || t("product");
+  productPreviewDetails.replaceChildren();
+  for (const [field, value] of Object.entries(record)) {
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = productFieldLabel(field);
+    description.textContent = value === null || value === undefined || value === ""
+      ? "—"
+      : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
+    productPreviewDetails.append(term, description);
+  }
+
+  const imageUrl = [record["Image(url)"], record.imagen_url, record.image_url, record.imagen, record.image]
+    .find(value => typeof value === "string" && value.trim());
+  productPreviewImage.hidden = !imageUrl;
+  productPreviewImageEmpty.hidden = Boolean(imageUrl);
+  productPreviewImageEmpty.textContent = t("noProductImage");
+  productPreviewImage.alt = record.Producto || record.Sku || t("product");
+  productPreviewImage.onerror = () => {
+    productPreviewImage.hidden = true;
+    productPreviewImageEmpty.hidden = false;
+    productPreviewImageEmpty.textContent = t("productImageError");
+  };
+  if (imageUrl) productPreviewImage.src = imageUrl.trim();
+  else productPreviewImage.removeAttribute("src");
+  productPreviewDialog.showModal();
 }
 
 function renderStatistics() {
@@ -376,9 +556,10 @@ async function importExcelFile(file) {
   if (!rows.length) throw new Error("La primera hoja no contiene productos.");
 
   const products = rows.map(toProductRow);
-  const { bySku, descriptionsBySku, takenSlugs } = await loadProductSlugs();
+  const { bySku, descriptionsBySku, productsBySku, takenSlugs } = await loadProductSlugs();
   let savedCount = 0;
   for (const product of products) {
+    const previous = productsBySku.get(product.sku) || null;
     const existingSlug = bySku.get(product.sku);
     const slug = existingSlug || reserveUniqueSlug(
       createProductSlug(product.producto, product.sku),
@@ -400,8 +581,10 @@ async function importExcelFile(file) {
     };
     const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
     if (error) throw error;
+    logProductChange(previous, payload);
     bySku.set(product.sku, slug);
     descriptionsBySku.set(product.sku, payload.descripcion);
+    productsBySku.set(product.sku, payload);
     savedCount += 1;
     importStatus.textContent = `Guardados ${savedCount}/${products.length} (${product.sku})`;
   }
@@ -449,6 +632,10 @@ async function generateMissingDescriptions() {
           .update({ descripcion: product.descripcion })
           .eq("Sku", product.sku);
         if (upsertError) throw upsertError;
+        logProductChange(
+          { Sku: product.sku, Producto: product.producto, descripcion: null },
+          { Sku: product.sku, Producto: product.producto, descripcion: product.descripcion },
+        );
         savedCount += 1;
         statistics.completed += 1;
         statistics.rows.push({
@@ -503,6 +690,172 @@ async function generateMissingDescriptions() {
     finishStatistics(signal.aborted ? t("canceled") : t("finished"));
     generationController = null;
   }
+}
+
+function imageWorkerUrl() {
+  const url = String(window.SAMA_IMAGE_WORKER_URL || "").trim();
+  if (!url) throw new Error("Configura SAMA_IMAGE_WORKER_URL en Admin/admin.html después de desplegar el Worker.");
+  return url;
+}
+
+async function imageWorkerRequest(body) {
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError || !sessionData.session?.access_token) throw new Error("La sesión administrativa expiró. Inicia sesión nuevamente.");
+  const response = await fetch(imageWorkerUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `El Worker respondió con HTTP ${response.status}.`);
+  return payload;
+}
+
+async function imageWorkerDownloadRequest(body) {
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError || !sessionData.session?.access_token) throw new Error("La sesión administrativa expiró. Inicia sesión nuevamente.");
+  const response = await fetch(imageWorkerUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionData.session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || `El Worker respondió con HTTP ${response.status}.`);
+  }
+  return response;
+}
+
+function renderImageResults() {
+  imageResultsGrid.replaceChildren();
+  imageEmpty.hidden = imageResults.length > 0;
+  for (const [index, result] of imageResults.entries()) {
+    const card = document.createElement("label");
+    card.className = "image-result-card";
+    card.innerHTML = `<input type="checkbox" data-image-index="${index}" ${result.selected ? "checked" : ""}><img src="${escapeHtml(result.thumbnailUrl || result.imageUrl)}" alt="${escapeHtml(result.title)}"><strong>${escapeHtml(result.title || "Imagen")}</strong><small>${escapeHtml(result.sourcePageUrl || "Origen no disponible")}</small>`;
+    card.querySelector("input").addEventListener("change", event => {
+      result.selected = event.currentTarget.checked;
+      const selectedCount = imageResults.filter(item => item.selected).length;
+      imageSelectionCount.textContent = `${selectedCount} seleccionadas`;
+      saveSelectedImagesButton.disabled = selectedCount === 0;
+    });
+    imageResultsGrid.append(card);
+  }
+}
+
+async function loadImageProducts() {
+  const { data, error } = await client.from("products")
+    .select('Sku,Producto,"Image(url)"')
+    .eq("is_active", true)
+    .order("Producto");
+  if (error) throw error;
+  imageProducts = (data || []).filter(product => !String(product["Image(url)"] || "").trim());
+  imageIndex = 0;
+  imageProcessStopped = false;
+  renderCurrentImageProduct();
+}
+
+function renderCurrentImageProduct() {
+  const product = imageProducts[imageIndex];
+  imageProgress.textContent = imageProducts.length
+    ? `${Math.min(imageIndex + 1, imageProducts.length)} / ${imageProducts.length}`
+    : "0 / 0";
+  imageProductName.textContent = product?.Producto || "—";
+  imageProductSku.textContent = `SKU: ${product?.Sku || "—"}`;
+  imageQuery.value = product?.Producto || "";
+  searchImagesButton.disabled = !product;
+  skipImageButton.disabled = !product;
+  stopImageProcessButton.disabled = !product;
+  imageResults = [];
+  imageSelectionCount.textContent = "0 seleccionadas";
+  saveSelectedImagesButton.disabled = true;
+  renderImageResults();
+}
+
+async function searchCurrentProductImages() {
+  const product = imageProducts[imageIndex];
+  if (!product) return;
+  const query = imageQuery.value.trim() || product.Producto;
+  const searchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
+  const searchWindow = window.open(
+    searchUrl,
+    "sama-image-search",
+    "popup,width=1100,height=850,left=500,top=80",
+  );
+  if (!searchWindow) {
+    imageStatus.textContent = "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.";
+    return;
+  }
+  searchWindow.focus();
+  imageStatus.textContent = "Google Imágenes abierto. Arrastra o pega las imágenes aquí.";
+}
+
+async function chooseImageFolder() {
+  if (!window.showDirectoryPicker) {
+    imageStatus.textContent = "Tu navegador no permite elegir una carpeta. Las imágenes se descargarán normalmente.";
+    return;
+  }
+  imageDirectoryHandle = await window.showDirectoryPicker({ mode: "readwrite", startIn: "downloads" });
+  imageStatus.textContent = "Carpeta seleccionada. Las imágenes se guardarán allí.";
+}
+
+function imageExtension(contentType) {
+  return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" })[contentType] || "jpg";
+}
+
+async function downloadImageBlob(image, filename) {
+  const response = await imageWorkerDownloadRequest({ action: "download", imageUrl: image.imageUrl, filename });
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get("content-type") || "image/jpeg",
+  };
+}
+
+async function saveCurrentProductImages() {
+  const product = imageProducts[imageIndex];
+  const selected = imageResults.filter(item => item.selected);
+  if (!product || !selected.length) return;
+  saveSelectedImagesButton.disabled = true;
+  imageStatus.textContent = "Descargando imágenes...";
+  try {
+    for (const [index, image] of selected.entries()) {
+      const downloaded = await downloadImageBlob(image, `${product.Sku}-${index === 0 ? "primary" : `secondary-${String(index).padStart(2, "0")}`}`);
+      const filename = `${product.Sku}-${index === 0 ? "primary" : `secondary-${String(index).padStart(2, "0")}`}.${imageExtension(downloaded.contentType)}`;
+      if (imageDirectoryHandle) {
+        const fileHandle = await imageDirectoryHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(downloaded.blob);
+        await writable.close();
+      } else {
+        const url = URL.createObjectURL(downloaded.blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+    }
+    imageStatus.textContent = `${selected.length} imagen(es) descargada(s) en Galería.`;
+    imageProducts.splice(imageIndex, 1);
+    if (imageIndex >= imageProducts.length) imageIndex = Math.max(0, imageProducts.length - 1);
+    renderCurrentImageProduct();
+  } catch (error) {
+    imageStatus.textContent = `Error: ${error.message}`;
+    saveSelectedImagesButton.disabled = false;
+  }
+}
+
+function skipCurrentImageProduct() {
+  if (!imageProducts.length) return;
+  imageProducts.splice(imageIndex, 1);
+  if (imageIndex >= imageProducts.length) imageIndex = Math.max(0, imageProducts.length - 1);
+  renderCurrentImageProduct();
 }
 
 function valueFor(record, field) {
@@ -573,6 +926,7 @@ function render() {
     const isSelected = selectedSearchFields.has(field);
     toggle.type = "button";
     toggle.className = `column-filter-toggle${isSelected ? " is-active" : ""}`;
+    header.classList.toggle("is-filter-active", isSelected);
     toggle.textContent = label;
     toggle.setAttribute("aria-pressed", String(isSelected));
     toggle.setAttribute("aria-label", t(isSelected ? "removeFilter" : "filterColumn", { column: label }));
@@ -593,8 +947,9 @@ function render() {
     row.addEventListener("click", () => {
       if (selectedProductSkus.has(record.Sku)) selectedProductSkus.delete(record.Sku);
       else selectedProductSkus.add(record.Sku);
-      render();
+      row.classList.toggle("is-selected", selectedProductSkus.has(record.Sku));
     });
+    row.addEventListener("dblclick", () => openProductPreview(record));
     row.addEventListener("contextmenu", event => {
       event.preventDefault();
       selectedProductSkus.add(record.Sku);
@@ -632,8 +987,11 @@ function openProductDialog(record = null) {
 
 async function deleteProducts(skus) {
   if (!skus.length) throw new Error("Selecciona al menos un producto.");
+  const { data: removedProducts, error: selectError } = await client.from("products").select("*").in("Sku", skus);
+  if (selectError) throw selectError;
   const { error } = await client.from("products").delete().in("Sku", skus);
   if (error) throw error;
+  (removedProducts || []).forEach(logProductRemoval);
   skus.forEach(sku => selectedProductSkus.delete(sku));
 }
 
@@ -664,7 +1022,7 @@ async function openCategoryDeleteDialog() {
 }
 
 async function deleteCategoryProducts(category) {
-  const { data, error: selectError } = await client.from("products").select("Sku,Categoria");
+  const { data, error: selectError } = await client.from("products").select("*");
   if (selectError) throw selectError;
   const normalizedCategory = category.toLocaleLowerCase("es");
   const skus = (data || [])
@@ -674,8 +1032,10 @@ async function deleteCategoryProducts(category) {
     .map(record => record.Sku)
     .filter(Boolean);
   if (!skus.length) throw new Error("No se encontraron productos para esa categoría.");
+  const removedProducts = (data || []).filter(record => skus.includes(record.Sku));
   const { error: deleteError } = await client.from("products").delete().in("Sku", skus);
   if (deleteError) throw deleteError;
+  removedProducts.forEach(logProductRemoval);
   skus.forEach(sku => selectedProductSkus.delete(sku));
   await loadView();
 }
@@ -689,8 +1049,11 @@ async function executeDeleteAction(action) {
   }
   if (action === "all") {
     if (!window.confirm("¿Borrar absolutamente todos los productos? Esta acción no se puede deshacer.")) return;
+    const { data: removedProducts, error: selectError } = await client.from("products").select("Sku,Producto").not("Sku", "is", null);
+    if (selectError) throw selectError;
     const { error } = await client.from("products").delete().not("Sku", "is", null);
     if (error) throw error;
+    (removedProducts || []).forEach(logProductRemoval);
     selectedProductSkus.clear();
     await loadView();
     return;
@@ -698,8 +1061,11 @@ async function executeDeleteAction(action) {
   if (action === "descriptions") {
     const confirmed = window.confirm("¿Borrar todas las descripciones de todos los productos? Esta acción no se puede deshacer.");
     if (!confirmed) return;
+    const { data: products, error: selectError } = await client.from("products").select("*").not("Sku", "is", null);
+    if (selectError) throw selectError;
     const { error } = await client.from("products").update({ descripcion: null }).not("Sku", "is", null);
     if (error) throw error;
+    (products || []).forEach(product => logProductChange(product, { ...product, descripcion: null }));
     await loadView();
     return;
   }
@@ -761,8 +1127,11 @@ viewSelect.addEventListener("change", () => {
 searchInput.addEventListener("input", render);
 refreshButton.addEventListener("click", loadView);
 importButton.addEventListener("click", () => importInput.click());
+activityLogButton.addEventListener("click", () => activityLogDialog.showModal());
+closeActivityLogButton.addEventListener("click", () => activityLogDialog.close());
 addProductButton.addEventListener("click", () => openProductDialog());
 cancelProductButton.addEventListener("click", () => productDialog.close());
+closeProductPreviewButton.addEventListener("click", () => productPreviewDialog.close());
 deleteMenuButton.addEventListener("click", () => {
   deleteMenu.hidden = !deleteMenu.hidden;
   deleteMenuButton.setAttribute("aria-expanded", String(!deleteMenu.hidden));
@@ -843,11 +1212,13 @@ productForm.addEventListener("submit", async event => {
   try {
     if (!payload.Sku || !payload.Producto) throw new Error("SKU y Producto son obligatorios.");
     if (payload.stock !== null && (!Number.isInteger(payload.stock) || payload.stock < 0)) throw new Error("Las existencias deben ser un entero no negativo.");
-    const { bySku, takenSlugs } = await loadProductSlugs();
+    const { bySku, productsBySku, takenSlugs } = await loadProductSlugs();
+    const previous = productsBySku.get(sku) || null;
     const existingSlug = bySku.get(sku);
     payload.slug = existingSlug || reserveUniqueSlug(createProductSlug(productName, sku), sku, takenSlugs);
     const { error } = await client.from("products").upsert(payload, { onConflict: "Sku" });
     if (error) throw error;
+    logProductChange(previous, payload);
     productDialog.close();
     await loadView();
   } catch (error) {
@@ -862,14 +1233,41 @@ menuToggle.addEventListener("click", () => {
 document.querySelectorAll("[data-admin-view]").forEach(button => {
   button.addEventListener("click", () => {
     const statisticsView = button.dataset.adminView === "statistics";
+    const imagesView = button.dataset.adminView === "images";
     catalogPanel.hidden = statisticsView;
     catalogHeading.hidden = statisticsView;
     statisticsPanel.hidden = !statisticsView;
+    imagesPanel.hidden = !imagesView;
+    catalogPanel.hidden = statisticsView || imagesView;
+    catalogHeading.hidden = statisticsView || imagesView;
     document.querySelectorAll("[data-admin-view]").forEach(item => item.classList.toggle("is-active", item === button));
     adminNavigation.hidden = true;
     menuToggle.setAttribute("aria-expanded", "false");
     if (statisticsView) renderStatistics();
+    if (imagesView) {
+      loadImageProducts().catch(error => {
+        imageStatus.textContent = `Error: ${error.message}`;
+      });
+    }
   });
+});
+searchImagesButton.addEventListener("click", searchCurrentProductImages);
+imageQuery.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    searchCurrentProductImages();
+  }
+});
+saveSelectedImagesButton.addEventListener("click", saveCurrentProductImages);
+chooseImageFolderButton.addEventListener("click", () => {
+  chooseImageFolder().catch(error => {
+    imageStatus.textContent = `No se pudo seleccionar la carpeta: ${error.message}`;
+  });
+});
+skipImageButton.addEventListener("click", skipCurrentImageProduct);
+stopImageProcessButton.addEventListener("click", () => {
+  imageProcessStopped = true;
+  imageStatus.textContent = "Proceso detenido.";
 });
 importInput.addEventListener("change", async event => {
   const [file] = event.currentTarget.files;

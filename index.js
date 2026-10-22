@@ -21,7 +21,7 @@ const translations = {
 		loadError: "No se pudo cargar el catálogo: {message}", retry: "Reintentar", noFeatured: "Aún no hay productos destacados.",
 		noProducts: "Aún no hay productos disponibles en el catálogo.", productsWillAppear: "Los productos aparecerán aquí cuando se agreguen a la base de datos.",
 		productDetails: "Consulta la ficha del producto para conocer sus detalles.", noDescription: "No hay una descripción disponible para este producto.",
-		productInformation: "Información del producto", category: "Categoría", subcategory: "Subcategoría", stock: "Existencias", available: "Disponible", unavailable: "No disponible",
+		productInformation: "Información del producto", descriptionSection: "Descripción", samaSupplier: "Distribuidora SAMA", category: "Categoría", subcategory: "Subcategoría", stock: "Existencias", available: "Disponible", unavailable: "No disponible", recommendedProducts: "También te puede interesar",
 		quantity: "Cantidad", addQuote: "Agregar a cotización", inFavorites: "♥ En favoritos", addFavorites: "♡ Agregar a favoritos",
 		shareProduct: "Compartir producto", shareTitle: "Producto {name} de SAMA", linkCopied: "Enlace del producto copiado.",
 		shareUnavailable: "No se pudo compartir el enlace en este navegador.", shareError: "No se pudo compartir el producto.",
@@ -62,7 +62,7 @@ const translations = {
 		loadError: "Could not load catalog: {message}", retry: "Retry", noFeatured: "There are no featured products yet.",
 		noProducts: "There are no products in the catalog yet.", productsWillAppear: "Products will appear here once they are added to the database.",
 		productDetails: "Open the product details to learn more.", noDescription: "No description is available for this product.",
-		productInformation: "Product information", category: "Category", subcategory: "Subcategory", stock: "Stock", available: "Available", unavailable: "Unavailable",
+		productInformation: "Product information", descriptionSection: "Description", samaSupplier: "SAMA Distribution", category: "Category", subcategory: "Subcategory", stock: "Stock", available: "Available", unavailable: "Unavailable", recommendedProducts: "You may also like",
 		quantity: "Quantity", addQuote: "Add to quote", inFavorites: "♥ In favorites", addFavorites: "♡ Add to favorites",
 		shareProduct: "Share product", shareTitle: "SAMA product: {name}", linkCopied: "Product link copied.",
 		shareUnavailable: "This browser cannot share the link.", shareError: "Could not share this product.",
@@ -88,6 +88,14 @@ const reducedMotionPreference = window.matchMedia("(prefers-reduced-motion: redu
 let manualTheme = false;
 const products = [];
 const PRODUCTS_TABLE = "products";
+const WHATSAPP_QUOTE_NUMBER = "50670162390";
+const productTranslations = new Map();
+const pendingTranslations = new Set();
+const failedTranslations = new Set();
+const translationQueue = [];
+let activeTranslations = 0;
+let translationObserver = null;
+const MAX_CONCURRENT_TRANSLATIONS = 2;
 const categoryIcons = ["▦", "✦", "⌁", "▤"];
 const categoryToneByName = {
 	"limpieza": "cleaning",
@@ -96,6 +104,10 @@ const categoryToneByName = {
 	"office": "office",
 	"farmacia": "pharmacy",
 	"pharmacy": "pharmacy",
+	"electrodoméstico": "technology",
+	"electrodomestico": "technology",
+	"electrodomésticos": "technology",
+	"electrodomesticos": "technology",
 	"electrodomésticos y tecnología": "technology",
 	"electrodomesticos y tecnologia": "technology",
 	"technology": "technology",
@@ -148,6 +160,125 @@ function categoryLabel(name) {
 		const normalized = trimmed.toLocaleLowerCase("es");
 		return englishCategoryLabels[normalized] || trimmed;
 	}).join(", ");
+}
+
+function translationMatchesProduct(translation, product) {
+	return translation?.source_name === product.name
+		&& translation.source_description === product.description
+		&& translation.source_category === product.category
+		&& translation.source_subcategory === product.subcategory;
+}
+
+function productText(product, field) {
+	const original = product?.[field] || "";
+	if (state.language !== "en") return original;
+	const translation = productTranslations.get(product.sku);
+	if (!translationMatchesProduct(translation, product)) {
+		return field === "category" ? categoryLabel(original) : original;
+	}
+	return translation[`${field}_en`] || (field === "category" ? categoryLabel(original) : original);
+}
+
+async function loadProductTranslations(client) {
+	try {
+		const { data, error } = await client.from("product_translations")
+			.select("sku,name_en,description_en,category_en,subcategory_en,source_name,source_description,source_category,source_subcategory");
+		if (error) return;
+		for (const translation of data || []) {
+			const product = products.find(entry => entry.sku === translation.sku);
+			if (product && translationMatchesProduct(translation, product)) {
+				productTranslations.set(translation.sku, translation);
+			}
+		}
+	} catch {
+		// The catalog remains usable if the translation migration has not been applied yet.
+	}
+}
+
+function refreshProductText(product) {
+	document.querySelectorAll("[data-product-text][data-product-sku]").forEach(element => {
+		if (element.dataset.productSku === product.sku) {
+			const value = productText(product, element.dataset.productText);
+			element.textContent = value || (element.dataset.productText === "description" ? t("noDescription") : "");
+		}
+	});
+	document.querySelectorAll(".quote-item").forEach(item => {
+		if (item.querySelector(".sku")?.textContent === `SKU: ${product.sku}`) {
+			item.querySelector("h3").textContent = productText(product, "name");
+			item.querySelector(".product-category").textContent = productText(product, "category");
+		}
+	});
+	const detail = document.querySelector(".product-detail-modal");
+	if (detail) {
+		detail.querySelector(".product-detail-copy .product-category").textContent = [
+			productText(product, "category"),
+			productText(product, "subcategory"),
+		].filter(Boolean).join(" · ");
+		detail.querySelector(".product-detail-copy h2").textContent = productText(product, "name");
+		const description = detail.querySelector("#product-description p");
+		if (description) description.textContent = productText(product, "description") || t("noDescription");
+		detail.querySelectorAll(".product-detail-field").forEach(field => {
+			const label = field.querySelector("dt")?.textContent;
+			if (label === t("category")) field.querySelector("dd").textContent = productText(product, "category") || "—";
+			if (label === t("subcategory")) field.querySelector("dd").textContent = productText(product, "subcategory") || "—";
+		});
+	}
+}
+
+function translateProduct(product) {
+	if (state.language !== "en" || !window.SAMA_TRANSLATION_WORKER_URL
+		|| translationMatchesProduct(productTranslations.get(product.sku), product)
+		|| pendingTranslations.has(product.sku) || failedTranslations.has(product.sku)) return;
+	pendingTranslations.add(product.sku);
+	translationQueue.push(product);
+	processTranslationQueue();
+}
+
+function processTranslationQueue() {
+	while (activeTranslations < MAX_CONCURRENT_TRANSLATIONS && translationQueue.length) {
+		const product = translationQueue.shift();
+		activeTranslations += 1;
+		fetch(window.SAMA_TRANSLATION_WORKER_URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ sku: product.sku }),
+		})
+			.then(async response => {
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(payload.error || `Translation failed with HTTP ${response.status}.`);
+				if (!translationMatchesProduct(payload, product)) throw new Error("The product changed while it was being translated.");
+				productTranslations.set(product.sku, payload);
+				refreshProductText(product);
+			})
+			.catch(() => failedTranslations.add(product.sku))
+			.finally(() => {
+				pendingTranslations.delete(product.sku);
+				activeTranslations -= 1;
+				processTranslationQueue();
+			});
+	}
+}
+
+function observeProductTranslations() {
+	translationObserver?.disconnect();
+	if (state.language !== "en") return;
+	const cards = document.querySelectorAll(".product-card[data-product]");
+	if (!("IntersectionObserver" in window)) {
+		[...cards].slice(0, 4).forEach(card => {
+			const product = products.find(entry => entry.sku === card.dataset.product);
+			if (product) translateProduct(product);
+		});
+		return;
+	}
+	translationObserver = new IntersectionObserver(entries => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) continue;
+			translationObserver.unobserve(entry.target);
+			const product = products.find(item => item.sku === entry.target.dataset.product);
+			if (product) translateProduct(product);
+		}
+	}, { rootMargin: "250px 0px" });
+	cards.forEach(card => translationObserver.observe(card));
 }
 
 function applyTheme(theme) {
@@ -220,6 +351,7 @@ async function loadProducts() {
 	} else {
 		products.splice(0, products.length, ...(data || []).map(normalizeProduct).filter(product => product.sku && product.name));
 		rebuildCategories();
+		await loadProductTranslations(client);
 	}
 	state.loading = false;
 	render();
@@ -252,6 +384,7 @@ function render() {
 		<footer><div class="footer-grid"><div><h3>SAMA</h3><p>${t("footerAbout")}</p></div><div><h3>${t("links")}</h3><p><a href="#catalog">${t("catalog")}</a><br><a href="#categorias">${t("categories")}</a><br><a href="#faq">${t("faq")}</a></p></div><div><h3>${t("contact")}</h3><p>${t("whatsapp")}: ${t("contactPending")}<br>Email: ${t("contactPending")}<br>${t("schedule")}</p></div></div></footer>
 		<nav class="mobile-nav"><button data-scroll-products><strong>⌂</strong>${t("store")}</button><button data-favorites><strong>♡</strong>${t("favorites")}</button><button data-cart><strong>▱</strong>${t("quote")} (${cartUnitCount()})</button><button data-account><strong>♙</strong>${t("account")}</button></nav><a class="whatsapp" href="https://wa.me/" target="_blank" rel="noreferrer" aria-label="${t("contactWhatsApp")}"><img src="./Logo y Banner/Logo.jpg" alt="" onerror="this.hidden=true"><span>${t("whatsapp")}</span></a><div class="toast" id="toast"></div><div class="modal-backdrop" id="modal"></div>`;
 	bindEvents();
+	observeProductTranslations();
 }
 
 function showAccount() {
@@ -371,20 +504,33 @@ async function initializeAuth() {
 function categoryMenuItems() {
 	return categories;
 }
+function categoryMenuProducts(categoryName) {
+	return products.filter(product => product.category.split(",").some(category => category.trim() === categoryName));
+}
 function categoryMenuSubcategories(categoryName) {
-	return [...new Set(products
-		.filter(product => product.category.split(",").some(category => category.trim() === categoryName))
+	return [...new Set(categoryMenuProducts(categoryName)
 		.map(product => product.subcategory)
 		.filter(Boolean))]
 		.sort((left, right) => left.localeCompare(right, state.language));
 }
 function categorySubmenuMarkup(category) {
 	if (!category) return `<p class="category-submenu-empty">${t("subcategoriesPending")}</p>`;
+	const categoryProducts = categoryMenuProducts(category.name);
 	const subcategories = categoryMenuSubcategories(category.name);
-	const content = subcategories.length
-		? `<div class="category-submenu-grid">${subcategories.map(name => `<button type="button" class="category-submenu-item" data-subcategory="${escapeHtml(name)}" data-subcategory-parent="${escapeHtml(category.name)}">${escapeHtml(name)}<span aria-hidden="true">›</span></button>`).join("")}</div>`
+	const recommended = [...categoryProducts.filter(product => product.isFeatured), ...categoryProducts.filter(product => !product.isFeatured)].slice(0, 5);
+	if (categoryMenuOpen) recommended.forEach(translateProduct);
+	const recommendedMarkup = recommended.length
+		? `<div class="category-menu-featured-grid">${recommended.map(product => `<button type="button" class="category-menu-product" data-menu-product="${escapeHtml(product.sku)}"><img src="${escapeHtml(product.image || "./Logo y Banner/Logo.jpg")}" alt="" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"><span data-product-text="name" data-product-sku="${escapeHtml(product.sku)}">${escapeHtml(productText(product, "name"))}</span></button>`).join("")}</div>`
+		: `<p class="category-submenu-empty">${t("noProducts")}</p>`;
+	const subcategoryMarkup = subcategories.length
+		? `<div class="category-subcategory-grid">${subcategories.map(name => {
+			const representative = categoryProducts.find(product => product.subcategory === name);
+			if (categoryMenuOpen && representative) translateProduct(representative);
+			const image = representative?.image || "./Logo y Banner/Logo.jpg";
+			return `<button type="button" class="category-subcategory-card" data-subcategory="${escapeHtml(name)}" data-subcategory-parent="${escapeHtml(category.name)}"><img src="${escapeHtml(image)}" alt="" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"><span ${representative ? `data-product-text="subcategory" data-product-sku="${escapeHtml(representative.sku)}"` : ""}>${escapeHtml(representative ? productText(representative, "subcategory") : name)}</span></button>`;
+		}).join("")}</div>`
 		: `<p class="category-submenu-empty">${t("subcategoriesPending")}</p>`;
-	return `<div class="category-submenu-heading"><span class="product-category">${t("subcategories")}</span><h2>${escapeHtml(categoryLabel(category.name))}</h2></div>${content}<button type="button" class="category-submenu-all" data-category="${escapeHtml(category.name)}">${t("viewFullCategory")} →</button>`;
+	return `<div class="category-submenu-heading"><div><span class="product-category">${t("subcategories")}</span><h2>${escapeHtml(categoryLabel(category.name))}</h2></div><button type="button" class="category-submenu-all" data-category="${escapeHtml(category.name)}">${t("viewFullCategory")} →</button></div><section class="category-menu-section"><h3>${t("recommendedProducts")}</h3>${recommendedMarkup}</section><section class="category-menu-section category-menu-subcategories"><h3>${t("subcategories")}</h3>${subcategoryMarkup}</section>`;
 }
 function categoryMenuMarkup() {
 	const menuItems = categoryMenuItems();
@@ -420,7 +566,7 @@ function filteredProducts() {
 	const matches = products.filter(p => (
 		state.category === "Todos"
 		|| p.category.split(",").some(category => category.trim() === state.category)
-	) && (!state.subcategory || p.subcategory === state.subcategory) && `${p.name} ${p.sku} ${p.description}`.toLowerCase().includes(state.query.toLowerCase()));
+	) && (!state.subcategory || p.subcategory === state.subcategory) && `${p.name} ${p.sku} ${p.description} ${productText(p, "name")} ${productText(p, "description")}`.toLowerCase().includes(state.query.toLowerCase()));
 	return state.category === "Todos" && !state.subcategory && !state.query ? matches.filter(product => product.isFeatured) : matches;
 }
 function heroCarouselMarkup() {
@@ -485,7 +631,7 @@ function catalogContent() {
 	return `<div class="catalog-groups">${groups.map(group => {
 		const count = group.products.length;
 		const countLabel = count === 1 ? t("countOne") : t("countProducts", { count });
-		return `<section class="catalog-group"><header class="catalog-group-heading"><div><span class="product-category">${escapeHtml(group.category.icon)} · ${t("categories")}</span><h3>${escapeHtml(group.category.name)}</h3><span class="sku">${countLabel}</span></div><button class="text-link" data-category="${escapeHtml(group.category.name)}">${t("seeCategory")} →</button></header><div class="product-grid">${productCards(group.products.slice(0, 4))}</div></section>`;
+		return `<section class="catalog-group"><header class="catalog-group-heading"><div><span class="product-category">${escapeHtml(group.category.icon)} · ${t("categories")}</span><h3>${escapeHtml(categoryLabel(group.category.name))}</h3><span class="sku">${countLabel}</span></div><button class="text-link" data-category="${escapeHtml(group.category.name)}">${t("seeCategory")} →</button></header><div class="product-grid">${productCards(group.products.slice(0, 4))}</div></section>`;
 	}).join("")}</div>`;
 }
 function productCards(result = filteredProducts()) {
@@ -497,7 +643,7 @@ function productCards(result = filteredProducts()) {
 			: t("noProducts");
 		return `<div class="empty-state">${message}<br><span class="sku">${t("productsWillAppear")}</span></div>`;
 	}
-	return result.map(p => `<article class="product-card" data-product="${escapeHtml(p.sku)}" tabindex="0" role="button" aria-label="${escapeHtml(`${t("viewProduct")}: ${p.name}`)}"><div class="product-image"><img src="${escapeHtml(productImage(p))}" alt="${escapeHtml(p.name)}" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-body"><span class="product-category">${escapeHtml(p.category)}</span><h3>${escapeHtml(p.name)}</h3><span class="sku">SKU: ${escapeHtml(p.sku)}</span><p class="product-description">${escapeHtml(p.description || t("productDetails"))}</p><button class="primary-button" type="button">${t("viewProduct")}</button></div></article>`).join("");
+	return result.map(product => `<article class="product-card" data-product="${escapeHtml(product.sku)}" tabindex="0" role="button" aria-label="${escapeHtml(`${t("viewProduct")}: ${productText(product, "name")}`)}"><div class="product-image"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(productText(product, "name"))}" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-body"><span class="product-category" data-product-text="category" data-product-sku="${escapeHtml(product.sku)}">${escapeHtml(productText(product, "category"))}</span><h3 data-product-text="name" data-product-sku="${escapeHtml(product.sku)}">${escapeHtml(productText(product, "name"))}</h3><span class="sku">SKU: ${escapeHtml(product.sku)}</span><p class="product-description" data-product-text="description" data-product-sku="${escapeHtml(product.sku)}">${escapeHtml(productText(product, "description") || t("productDetails"))}</p><button class="primary-button" type="button">${t("viewProduct")}</button></div></article>`).join("");
 }
 function save() {
 	localStorage.setItem("sama-cart", JSON.stringify(state.cart));
@@ -521,6 +667,22 @@ function productUrl(sku) {
 	return url;
 }
 
+function recommendedProducts(product) {
+	const categoryNames = new Set(product.category.split(",").map(category => category.trim().toLocaleLowerCase("es")).filter(Boolean));
+	const subcategoryName = product.subcategory.trim().toLocaleLowerCase("es");
+	const candidates = products.filter(candidate => candidate.sku !== product.sku);
+	const sameCategory = candidates.filter(candidate => candidate.category.split(",").some(category => categoryNames.has(category.trim().toLocaleLowerCase("es"))));
+	const related = sameCategory.length || !subcategoryName
+		? sameCategory
+		: candidates.filter(candidate => candidate.subcategory.trim().toLocaleLowerCase("es") === subcategoryName);
+	return related.slice(0, 4);
+}
+
+function recommendationCards(result) {
+	result.forEach(translateProduct);
+	return result.map(candidate => `<button class="recommendation-card" type="button" data-recommendation="${escapeHtml(candidate.sku)}"><span class="recommendation-image"><img src="${escapeHtml(productImage(candidate))}" alt="" loading="lazy" onerror="this.src='./Logo y Banner/Logo.jpg'"></span><span class="product-category" data-product-text="category" data-product-sku="${escapeHtml(candidate.sku)}">${escapeHtml(productText(candidate, "category"))}</span><strong data-product-text="name" data-product-sku="${escapeHtml(candidate.sku)}">${escapeHtml(productText(candidate, "name"))}</strong><span class="sku">SKU: ${escapeHtml(candidate.sku)}</span></button>`).join("");
+}
+
 function closeProductDetail() {
 	const modal = document.querySelector("#modal");
 	modal.classList.remove("open");
@@ -534,7 +696,8 @@ function closeProductDetail() {
 
 function openModal(product, options = {}) {
 	if (!product) return;
-	document.title = `${product.name} | SAMA`;
+	translateProduct(product);
+	document.title = `${productText(product, "name")} | SAMA`;
 	const modal = document.querySelector("#modal");
 	if (options.updateUrl !== false) {
 		const url = productUrl(product.sku);
@@ -543,13 +706,32 @@ function openModal(product, options = {}) {
 	const stockLabel = product.stock == null || Number.isNaN(product.stock)
 		? "—"
 		: `${product.stock} (${product.stock > 0 ? t("available") : t("unavailable")})`;
+	const stockStatusClass = product.stock == null || Number.isNaN(product.stock)
+		? "is-unknown"
+		: product.stock > 0 ? "is-available" : "is-unavailable";
 	const metadata = [
-		[t("category"), product.category || "—"],
-		[t("subcategory"), product.subcategory || "—"],
+		[t("category"), productText(product, "category") || "—"],
+		[t("subcategory"), productText(product, "subcategory") || "—"],
 		[t("stock"), stockLabel],
 	].map(([label, value]) => `<div class="product-detail-field"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
-	modal.innerHTML = `<div class="modal product-detail-modal"><button class="modal-close" data-close type="button" aria-label="${t("close")}">×</button><div class="modal-content"><div class="modal-image"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-detail-copy"><span class="product-category">${escapeHtml(product.category)}${product.subcategory ? ` · ${escapeHtml(product.subcategory)}` : ""}</span><h2>${escapeHtml(product.name)}</h2><span class="sku">SKU: ${escapeHtml(product.sku)}</span><p class="product-description product-detail-description">${escapeHtml(product.description || t("noDescription"))}</p><h3 class="product-information-title">${t("productInformation")}</h3><dl class="product-detail-fields">${metadata}</dl><div class="quantity"><span>${t("quantity")}</span><button type="button" data-quantity="-1" aria-label="${t("decreaseQuantity")}">−</button><strong id="quantity">1</strong><button type="button" data-quantity="1" aria-label="${t("increaseQuantity")}">+</button></div><button class="primary-button" data-modal-cart="${escapeHtml(product.sku)}">${t("addQuote")}</button><button class="secondary-button" data-modal-favorite="${escapeHtml(product.sku)}">${state.favorites.includes(product.sku) ? t("inFavorites") : t("addFavorites")}</button><button class="secondary-button" data-share>${t("shareProduct")}</button></div></div></div>`;
+	const recommendations = recommendedProducts(product);
+	const recommendationsMarkup = recommendations.length
+		? `<section class="product-recommendations" id="product-recommendations"><h3>${t("recommendedProducts")}</h3><div class="recommendation-grid">${recommendationCards(recommendations)}</div></section>`
+		: "";
+	const detailTabs = [
+		["product-description", t("descriptionSection")],
+		["product-information", t("productInformation")],
+		...(recommendations.length ? [["product-recommendations", t("recommendedProducts")]] : []),
+	].map(([section, label]) => `<button type="button" data-detail-section="${section}">${label}</button>`).join("");
+	modal.innerHTML = `<div class="modal product-detail-modal"><button class="modal-close" data-close type="button" aria-label="${t("close")}">×</button><div class="product-detail-main"><div class="modal-image"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"></div><div class="product-detail-copy"><span class="product-category">${escapeHtml(product.category)}${product.subcategory ? ` · ${escapeHtml(product.subcategory)}` : ""}</span><h2>${escapeHtml(product.name)}</h2><span class="sku">SKU: ${escapeHtml(product.sku)}</span></div><aside class="product-order-panel"><div class="product-order-heading"><span class="product-order-mark">S</span><strong>${t("samaSupplier")}</strong></div><div class="product-stock-status ${stockStatusClass}"><span aria-hidden="true"></span><span>${t("stock")}: <strong>${stockLabel}</strong></span></div><p class="product-order-note">${t("quotePriceNote")}</p><div class="quantity"><span>${t("quantity")}</span><button type="button" data-quantity="-1" aria-label="${t("decreaseQuantity")}">−</button><strong id="quantity">1</strong><button type="button" data-quantity="1" aria-label="${t("increaseQuantity")}">+</button></div><div class="product-order-actions"><button class="primary-button" data-modal-cart="${escapeHtml(product.sku)}">${t("addQuote")}</button><button class="secondary-button" data-modal-favorite="${escapeHtml(product.sku)}">${state.favorites.includes(product.sku) ? t("inFavorites") : t("addFavorites")}</button><button class="secondary-button" data-share>${t("shareProduct")}</button></div></aside></div><nav class="product-detail-tabs" aria-label="${t("productInformation")}">${detailTabs}</nav><div class="product-detail-sections"><section class="product-detail-section" id="product-description"><h3>${t("descriptionSection")}</h3><p>${escapeHtml(product.description || t("noDescription"))}</p></section><section class="product-detail-section" id="product-information"><h3>${t("productInformation")}</h3><dl class="product-detail-fields">${metadata}</dl></section></div>${recommendationsMarkup}</div>`;
+	refreshProductText(product);
 	modal.classList.add("open");
+	modal.querySelectorAll("[data-detail-section]").forEach(button => button.addEventListener("click", () => {
+		modal.querySelector(`#${button.dataset.detailSection}`)?.scrollIntoView({ behavior: reducedMotionPreference.matches ? "auto" : "smooth", block: "start" });
+	}));
+	modal.querySelectorAll("[data-recommendation]").forEach(button => button.addEventListener("click", () => {
+		openModal(products.find(candidate => candidate.sku === button.dataset.recommendation));
+	}));
 	let quantity = 1;
 	modal.querySelectorAll("[data-quantity]").forEach(btn => btn.addEventListener("click", () => { quantity = Math.max(1, quantity + Number(btn.dataset.quantity)); modal.querySelector("#quantity").textContent = quantity; }));
 	modal.querySelector("[data-modal-cart]").addEventListener("click", () => addToCart(product, quantity));
@@ -561,7 +743,8 @@ function openModal(product, options = {}) {
 async function shareProduct(product) {
 	const url = new URL(window.location.href);
 	url.searchParams.set("producto", product.sku);
-	const shareData = { title: product.name, text: t("shareTitle", { name: product.name }), url: url.toString() };
+	const shareName = productText(product, "name");
+	const shareData = { title: shareName, text: t("shareTitle", { name: shareName }), url: url.toString() };
 	try {
 		if (navigator.share) {
 			await navigator.share(shareData);
@@ -578,7 +761,7 @@ async function shareProduct(product) {
 function addToCart(product, quantity = 1) {
 	const item = state.cart.find(i => i.sku === product.sku);
 	if (item) item.quantity += quantity; else state.cart.push({ sku: product.sku, name: product.name, quantity });
-	save(); render(); toast(t("addedQuote", { name: product.name }));
+	save(); render(); toast(t("addedQuote", { name: productText(product, "name") }));
 }
 async function toggleFavorite(sku) {
 	const adding = !state.favorites.includes(sku);
@@ -594,8 +777,9 @@ async function toggleFavorite(sku) {
 }
 function showFavorites() {
 	const favoriteProducts = products.filter(product => state.favorites.includes(product.sku));
+	favoriteProducts.forEach(translateProduct);
 	const modal = document.querySelector("#modal");
-	const details = favoriteProducts.map(product => `<article class="favorite-item"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"><div class="favorite-item-info"><span class="product-category">${escapeHtml(product.category)}</span><h3>${escapeHtml(product.name)}</h3><span class="sku">SKU: ${escapeHtml(product.sku)}</span></div><div class="favorite-item-actions"><button class="primary-button" type="button" data-favorite-add="${escapeHtml(product.sku)}">${t("addFavoriteQuote")}</button><button class="secondary-button" type="button" data-favorite-open="${escapeHtml(product.sku)}">${t("viewProduct")}</button><button class="favorite-remove" type="button" data-favorite-remove="${escapeHtml(product.sku)}">${t("removeFavorite")}</button></div></article>`).join("");
+	const details = favoriteProducts.map(product => `<article class="favorite-item"><img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(productText(product, "name"))}" onerror="this.src='./Logo y Banner/Logo.jpg'"><div class="favorite-item-info"><span class="product-category" data-product-text="category" data-product-sku="${escapeHtml(product.sku)}">${escapeHtml(productText(product, "category"))}</span><h3 data-product-text="name" data-product-sku="${escapeHtml(product.sku)}">${escapeHtml(productText(product, "name"))}</h3><span class="sku">SKU: ${escapeHtml(product.sku)}</span></div><div class="favorite-item-actions"><button class="primary-button" type="button" data-favorite-add="${escapeHtml(product.sku)}">${t("addFavoriteQuote")}</button><button class="secondary-button" type="button" data-favorite-open="${escapeHtml(product.sku)}">${t("viewProduct")}</button><button class="favorite-remove" type="button" data-favorite-remove="${escapeHtml(product.sku)}">${t("removeFavorite")}</button></div></article>`).join("");
 	const content = favoriteProducts.length
 		? `<div class="favorite-layout"><div class="favorite-items">${details}</div><aside class="favorite-summary"><h3>${t("favoriteSummary")}</h3><div class="quote-summary-row"><span>${t("favorites")}</span><strong>${favoriteProducts.length}</strong></div><div class="quote-summary-row"><span>${t("quote")}</span><strong>${state.cart.length}</strong></div><p>${t("favoritesIntro")}</p><button class="primary-button" type="button" data-favorite-add-all>${t("addAllFavorites")}</button></aside></div>`
 		: `<div class="favorite-empty"><h3>${t("emptyFavorites")}</h3><p>${t("favoritesIntro")}</p><button class="primary-button" type="button" data-favorite-browse>${t("browseCatalog")}</button></div>`;
@@ -610,7 +794,7 @@ function showFavorites() {
 		const item = state.cart.find(entry => entry.sku === product.sku);
 		if (item) item.quantity = Math.max(1, Number(item.quantity) || 1) + 1;
 		else state.cart.push({ sku: product.sku, name: product.name, quantity: 1 });
-		save(); render(); showFavorites(); toast(t("addedQuote", { name: product.name }));
+		save(); render(); showFavorites(); toast(t("addedQuote", { name: productText(product, "name") }));
 	}));
 	modal.querySelectorAll("[data-favorite-remove]").forEach(button => button.addEventListener("click", async () => {
 		const sku = button.dataset.favoriteRemove;
@@ -643,7 +827,8 @@ function showCart() {
 	const modal = document.querySelector("#modal");
 	const details = state.cart.map(item => {
 		const product = products.find(entry => entry.sku === item.sku);
-		const name = product?.name || item.name;
+		if (product) translateProduct(product);
+		const name = product ? productText(product, "name") : item.name;
 		const quantity = Math.max(1, Number(item.quantity) || 1);
 		return `<article class="quote-item"><img src="${escapeHtml(product ? productImage(product) : imagePath)}" alt="${escapeHtml(name)}" onerror="this.src='./Logo y Banner/Logo.jpg'"><div class="quote-item-info"><span class="product-category">${escapeHtml(product?.category || t("quote"))}</span><h3>${escapeHtml(name)}</h3><span class="sku">SKU: ${escapeHtml(item.sku)}</span></div><div class="quote-item-actions"><div class="quote-stepper" aria-label="${t("quantity")}"><button type="button" data-cart-change="${escapeHtml(item.sku)}" data-step="-1" aria-label="${t("decreaseQuantity")}" ${quantity === 1 ? "disabled" : ""}>−</button><span>${quantity}</span><button type="button" data-cart-change="${escapeHtml(item.sku)}" data-step="1" aria-label="${t("increaseQuantity")}">+</button></div><button class="quote-remove" type="button" data-cart-remove="${escapeHtml(item.sku)}">${t("removeItem")}</button></div></article>`;
 	}).join("");
@@ -671,8 +856,11 @@ function showCart() {
 	}));
 	const whatsapp = modal.querySelector("[data-whatsapp]");
 	if (whatsapp && state.cart.length) whatsapp.addEventListener("click", () => {
-		const lines = state.cart.map(item => `${item.quantity}x ${item.name} (SKU: ${item.sku})`).join("\n");
-		window.open(`https://wa.me/?text=${encodeURIComponent(t("quoteMessage") + lines)}`, "_blank");
+		const lines = state.cart.map(item => {
+			const product = products.find(entry => entry.sku === item.sku);
+			return `${item.quantity}x ${product ? productText(product, "name") : item.name} (SKU: ${item.sku})`;
+		}).join("\n");
+		window.open(`https://wa.me/${WHATSAPP_QUOTE_NUMBER}?text=${encodeURIComponent(t("quoteMessage") + lines)}`, "_blank");
 	});
 }
 function bindEvents() {
@@ -697,6 +885,12 @@ function bindEvents() {
 		categoryMenuOpen = false;
 		render();
 		document.querySelector("#catalog").scrollIntoView({ behavior: "smooth" });
+	}));
+	document.querySelectorAll("[data-menu-product]").forEach(button => button.addEventListener("click", () => {
+		const product = products.find(entry => entry.sku === button.dataset.menuProduct);
+		if (!product) return;
+		closeCategoryMenu();
+		openModal(product);
 	}));
 	const carousel = document.querySelector(".hero-carousel");
 	if (carousel) {

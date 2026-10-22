@@ -18,12 +18,15 @@
     <script>
       // Solo es la URL pública del Worker. La GEMINI_API_KEY vive en Cloudflare.
       window.SAMA_DESCRIPTION_WORKER_URL = "https://sama-description-api.developpage.workers.dev";
+      window.SAMA_IMAGE_WORKER_URL = "https://sama-images-api.developpage.workers.dev";
+      // "local" guarda en la carpeta Galeria; "r2" se habilitará al configurar el bucket.
+      window.SAMA_IMAGE_STORAGE_MODE = "local";
     </script>
     <script src="js/product-description.js" defer></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
     <script src="js/sama-admin.js" defer></script>
   </head>
-  <body>
+<body>
     <div class="admin-shell">
       <header class="topbar">
         <div class="admin-menu">
@@ -31,6 +34,7 @@
           <nav class="admin-navigation" id="admin-navigation" hidden aria-label="Navegación del panel">
             <button class="menu-item is-active" type="button" data-admin-view="catalog" data-i18n="catalogTab">Catálogo</button>
             <button class="menu-item" type="button" data-admin-view="statistics" data-i18n="statisticsTab">Estadísticas</button>
+            <button class="menu-item" type="button" data-admin-view="images" data-i18n="imagesTab">Imágenes</button>
           </nav>
         </div>
         <a class="brand" href="../index.html" aria-label="SAMA, inicio">
@@ -97,10 +101,16 @@
               <button type="button" data-delete-action="selected" data-i18n="deleteSelected">Borrar seleccionados</button>
               <button type="button" data-delete-action="category" data-i18n="deleteCategory">Borrar categoría actual</button>
               <button type="button" data-delete-action="descriptions" data-i18n="deleteDescriptions">Borrar todas las descripciones</button>
+              <button type="button" data-delete-action="images" data-i18n="deleteImages">Borrar todas las imágenes</button>
               <button type="button" data-delete-action="all" data-i18n="deleteAll">Borrar todos los productos</button>
             </div>
             <button class="button" id="add-product" type="button" data-i18n="addProduct">Agregar</button>
             <button class="button" id="import-excel" type="button" data-i18n="importExcel">Importar Excel</button>
+            <button class="button button-activity" id="open-activity-log" type="button" aria-haspopup="dialog" aria-controls="activity-log-dialog" title="Cambios recientes">
+              <span class="activity-log-button-icon" aria-hidden="true">◷</span>
+              <span data-i18n="activityLogButton">Cambios</span>
+              <span class="activity-log-count" id="activity-log-count" aria-label="0">0</span>
+            </button>
             <button class="button" id="generate-descriptions" type="button" data-i18n="generateDescriptions">Generar descripciones</button>
           </div>
           <p class="import-status" id="import-status" role="status" aria-live="polite"></p>
@@ -125,6 +135,55 @@
           <div class="table-footer">
             <span data-i18n="footerTitle">SAMA · Catálogo</span>
             <span data-i18n="footerData">Datos activos de Supabase</span>
+          </div>
+        </section>
+        <section class="images-panel" id="images-panel" hidden>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="imagesEyebrow">IMÁGENES</p>
+              <h1 data-i18n="imagesTitle">Buscador asistido de imágenes</h1>
+              <p class="page-description" data-i18n="imagesDescription">Selecciona imágenes para productos que todavía no tienen una.</p>
+            </div>
+          </div>
+          <div class="image-workspace">
+            <aside class="image-product-card">
+              <span class="eyebrow" data-i18n="pendingImage">PENDIENTE</span>
+              <strong id="image-progress">0 / 0</strong>
+              <h2 id="image-product-name">—</h2>
+              <p id="image-product-sku">SKU: —</p>
+              <label class="search-box image-query-box" for="image-query">
+                <span class="search-icon" aria-hidden="true"></span>
+                <input id="image-query" type="search" data-i18n-placeholder="imageSearchPlaceholder" placeholder="Buscar imágenes..." />
+              </label>
+              <div class="image-actions">
+                <button class="button" id="search-images" type="button" data-i18n="searchImages">Abrir Google Imágenes</button>
+                <button class="button button-secondary" id="skip-image" type="button" data-i18n="skipImage">Omitir</button>
+                <button class="button button-danger" id="stop-image-process" type="button" data-i18n="stopImages">Detener</button>
+              </div>
+              <p class="import-status" id="image-status" role="status" aria-live="polite"></p>
+            </aside>
+            <div class="image-results-area">
+              <div class="image-results-meta">
+                <span id="image-selection-count">0 seleccionadas</span>
+                <div class="image-results-actions">
+                  <button class="button button-secondary" id="choose-image-folder" type="button" data-i18n="chooseImageFolder">Elegir carpeta Galería</button>
+                  <button class="button button-secondary" id="remove-selected-images" type="button" data-i18n="removeSelectedImages" disabled>Eliminar seleccionadas</button>
+                  <button class="button" id="save-selected-images" type="button" data-i18n="nextImage" disabled>Siguiente</button>
+                </div>
+              </div>
+              <div class="image-url-entry">
+                <label class="search-box image-query-box" for="image-url">
+                  <span class="search-icon" aria-hidden="true"></span>
+                  <input id="image-url" type="url" data-i18n-placeholder="imageUrlPlaceholder" placeholder="Pega aquí la URL directa de la imagen..." autocomplete="off" />
+                </label>
+                <button class="button button-secondary" id="add-image-url" type="button" data-i18n="addImageUrl">Agregar URL</button>
+              </div>
+              <div class="image-results-grid" id="image-results-grid"></div>
+              <div class="empty-state" id="image-empty">
+                <strong data-i18n="noImageResults">Busca imágenes para comenzar</strong>
+                <span data-i18n="imageResultsHint">Las imágenes solo se guardan después de tu selección.</span>
+              </div>
+            </div>
           </div>
         </section>
         <section class="statistics-panel" id="statistics-panel" hidden>
@@ -192,6 +251,38 @@
             <button class="button" type="submit" data-i18n="save">Guardar</button>
           </div>
         </form>
+      </dialog>
+      <dialog class="admin-dialog product-preview-dialog" id="product-preview-dialog" aria-labelledby="product-preview-title">
+        <section>
+          <div class="product-preview-brand-row">
+            <div class="product-preview-brand">
+              <img src="../Logo y Banner/Logo.jpg" alt="" />
+              <div><strong>SAMA</strong><span data-i18n="productDetails">Detalle del producto</span></div>
+            </div>
+            <button class="button button-secondary" id="close-product-preview" type="button" data-i18n="close">Cerrar</button>
+          </div>
+          <h2 class="product-preview-heading" id="product-preview-title"></h2>
+          <div class="product-preview-content">
+            <div class="product-preview-image-wrap">
+              <img id="product-preview-image" alt="" hidden />
+              <p id="product-preview-image-empty" data-i18n="noProductImage">Sin imagen disponible</p>
+            </div>
+            <dl id="product-preview-details" class="product-preview-details"></dl>
+          </div>
+        </section>
+      </dialog>
+      <dialog class="admin-dialog activity-log-dialog" id="activity-log-dialog" aria-labelledby="activity-log-title">
+        <section class="activity-log">
+          <div class="activity-log-heading">
+            <div>
+              <h2 id="activity-log-title" data-i18n="activityLogTitle">Cambios recientes</h2>
+              <p data-i18n="activityLogNote">Registro guardado en este navegador</p>
+            </div>
+            <button class="button button-secondary" id="close-activity-log" type="button" data-i18n="close">Cerrar</button>
+          </div>
+          <p class="activity-log-empty" id="activity-log-empty" data-i18n="activityLogEmpty">Todavía no hay cambios registrados.</p>
+          <ol class="activity-log-list" id="activity-log-list"></ol>
+        </section>
       </dialog>
       <dialog class="admin-dialog category-dialog" id="category-delete-dialog">
         <form id="category-delete-form" method="dialog">
