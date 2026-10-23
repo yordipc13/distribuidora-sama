@@ -56,6 +56,30 @@ a { color: inherit; text-decoration: none; }
 .theme-toggle { display: grid; width: 36px; place-items: center; font-size: 1rem; }
 .icon-button { border: 1px solid var(--line); border-radius: 11px; padding: 9px 11px; background: #fff; color: var(--ink); position: relative; }
 .icon-button:hover, .icon-button.active { border-color: var(--green-light); color: var(--green); }
+.icon-button[data-cart] {
+	background: linear-gradient(135deg, #16a34a 0%, #0f766e 100%);
+	border-color: rgba(22, 163, 74, .7);
+	color: #fff;
+	box-shadow: 0 10px 22px rgba(22, 163, 74, 0.24);
+	font-weight: 800;
+	letter-spacing: .02em;
+}
+.icon-button[data-cart]::before { content: "🛒"; font-size: 1rem; }
+.icon-button[data-cart] { font-size: 0; }
+.icon-button[data-cart] span { font-size: .78rem; }
+.icon-button[data-cart]:hover, .icon-button[data-cart].active {
+	border-color: rgba(22, 163, 74, .9);
+	color: #fff;
+	transform: translateY(-1px);
+	box-shadow: 0 14px 28px rgba(22, 163, 74, 0.34);
+}
+.icon-button[data-cart] .count {
+	background: #fff;
+	color: #0f766e;
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+.mobile-nav [data-cart] strong { font-size: 0; }
+.mobile-nav [data-cart] strong::before { content: "🛒"; font-size: 1.1rem; }
 .count { position: absolute; top: -7px; right: -6px; background: var(--green-light); color: #fff; border-radius: 20px; font-size: .65rem; padding: 2px 6px; }
 .category-menu { position: relative; width: min(1480px, 100%); }
 .category-menu-search { width: auto; flex: 0 0 auto; }
@@ -126,8 +150,24 @@ h1 { font-size: clamp(2.2rem, 5vw, 4.4rem); line-height: .98; margin: 15px 0; le
 .hero-carousel-count { color: rgb(255 255 255 / 72%); font-size: .72rem; }
 @keyframes hero-slide-enter { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes hero-dot-progress { to { transform: scaleX(1); } }
-.primary-button { border: 0; border-radius: 10px; padding: 13px 18px; color: #fff; background: var(--green); font-weight: 700; }
-.primary-button:hover { background: #166534; }
+.primary-button {
+	border: 0;
+	border-radius: 12px;
+	padding: 13px 18px;
+	color: #fff;
+	background: linear-gradient(135deg, #16a34a 0%, #0f766e 100%);
+	font-weight: 800;
+	letter-spacing: .02em;
+	box-shadow: 0 10px 22px rgba(22, 163, 74, 0.28);
+	transform: translateY(0);
+	transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.primary-button:hover {
+	background: linear-gradient(135deg, #15803d 0%, #0f766e 100%);
+	box-shadow: 0 14px 28px rgba(22, 163, 74, 0.38);
+	transform: translateY(-1px);
+	filter: brightness(1.03);
+}
 .secondary-button { border: 1px solid var(--green); border-radius: 10px; padding: 11px 16px; color: var(--green); background: #fff; font-weight: 700; }
 
 .section { max-width: 1240px; margin: 58px auto; padding: 0 5vw; }

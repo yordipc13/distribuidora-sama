@@ -1,0 +1,58 @@
+Contexto: Estamos trabajando en una pagina web para Distribuidora SAMMA. La referencia visual compartida es https://wladhe.com/. El flujo de datos esta documentado en "Documentacion distribuidora SAMA".
+
+Claramente esto adaptado para Distribuidora SAMA, recuerda el flujo de datos en el documento "Documento distribuidora SAMA"
+
+Alcance de estas instrucciones:
+- Algunos puntos pueden ser provisionales. Tomar cada punto como base, sin profundizar ni ampliar el alcance innecesariamente.
+- Antes de agregar una solucion, revisar si ya existe algo que se pueda simplificar o reemplazar.
+- De momento, omitir la seccion promocional o de colaboracion con marcas en la pagina de inicio. La tabla de marcas sigue contemplada para el catalogo en la base de datos.
+- Registrar en el documento de Drive las decisiones de migracion, analisis, simplificacion o reemplazo.
+
+Tareas a realizar (instrucciones): Se necesita una pagina web con los siguientes requerimientos.
+
+1. Estructura de Navegacion (Layout Base)
+1.1 Buscador Global: Implementar un buscador de productos destacado en la cabecera.
+1.2 Navegacion por Categorias: Facilitar el acceso a las categorias de SAMMA desde el menu. La presentacion puede adaptarse a escritorio o celular; no se requiere una barra lateral fija.
+1.3 Barra de Navegacion Inferior (Mobile): Acceso rapido a secciones clave:
+- Tienda (Shop)
+- Carrito/Cotizacion
+- Mi Cuenta
+- Favoritos
+El Carrito/Cotizacion reunira productos y cantidades para solicitar una cotizacion. No asumir un proceso de compra, checkout o pago en linea. El canal para enviar la solicitud queda pendiente de definicion.
+1.4 Boton de Contacto WhatsApp: Boton flotante persistente, ajustado para no tapar la navegacion en celulares.
+
+2. Pagina de Inicio (Landing Page)
+2.1 Banner Principal: Espacio para imagenes promocionales de la distribuidora.
+2.2 Vitrina de Destacados: Listado de productos destacados con:
+- Imagen del producto.
+- Boton "Agregar para cotizacion".
+
+3. Ficha Tecnica y Detalle de Producto
+3.1 Informacion del Producto: Al abrir un producto, mostrar:
+- Nombre del producto.
+- Codigo interno (SKU).
+- Categoria correspondiente.
+- Breve descripcion tecnica.
+- Imagen principal; mostrar una galeria solo si hay varias imagenes disponibles en los datos.
+- Usar una imagen de respaldo si la imagen principal falta o no carga.
+3.2 Controles de Usuario:
+- Selector de cantidad.
+- Boton "Agregar a cotizacion".
+- Boton para anadir a "Favoritos".
+- Funcion para compartir el producto.
+3.3 Navegacion de Retorno: Mostrar de forma sencilla la ruta de inicio, categoria y producto actual.
+3.4 Productos Relacionados: Carrusel o rejilla de productos similares al final de la pagina.
+
+4. Pie de Pagina (Footer Informativo)
+4.1 Acerca de SAMMA: Informacion corporativa breve.
+4.2 Enlaces Sociales: Iconos a las redes sociales de la empresa.
+4.3 Centro de Ayuda: Seccion de preguntas frecuentes (FAQ).
+4.4 Metodos de Pago: Galeria de imagenes con los logos de las formas de pago aceptadas. Es informativa; no implica integrar pagos en linea.
+
+5. Experiencia de Usuario (UX) y Mobile
+5.1 Optimizacion de Notificaciones: Corregir el error de la notificacion de WhatsApp para que no bloquee los nombres de la barra inferior en dispositivos moviles.
+5.2 Adaptabilidad (Responsive): Asegurar que toda la interfaz sea fluida tanto en escritorio como en celulares.
+
+6. Integracion de Datos (Backend con Supabase)
+6.1 Base de Datos: Configurar las tablas de productos, categorias y marcas.
+6.2 Motor de Busqueda: Funcionalidad para que el buscador filtre los datos reales de la base de datos.

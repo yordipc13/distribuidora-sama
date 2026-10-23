@@ -1,55 +1,69 @@
 -- Minimal public catalog schema for Distribuidora SAMA.
 
-create table public.categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  slug text not null unique,
-  is_active boolean not null default true,
-  created_at timestamptz not null default now()
+-- 1) Tables
+CREATE TABLE public.categories (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name text NOT NULL UNIQUE,
+    slug text NOT NULL UNIQUE,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now()
 );
 
-create table public.brands (
-  id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  slug text not null unique,
-  logo_url text,
-  is_active boolean not null default true,
-  created_at timestamptz not null default now()
+CREATE TABLE public.brands (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name text NOT NULL UNIQUE,
+    slug text NOT NULL UNIQUE,
+    logo_url text,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now()
 );
 
-create table public.products (
-  id uuid primary key default gen_random_uuid(),
-  sku text not null unique,
-  name text not null,
-  category_id uuid references public.categories(id),
-  brand_id uuid references public.brands(id),
-  subcategory text,
-  description text,
-  image_url text,
-  stock integer check (stock is null or stock >= 0),
-  is_featured boolean not null default false,
-  is_active boolean not null default true,
-  created_at timestamptz not null default now()
+CREATE TABLE public.products (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    sku text NOT NULL UNIQUE,
+    name text NOT NULL,
+    category_id uuid REFERENCES public.categories(id),
+    brand_id uuid REFERENCES public.brands(id),
+    subcategory text,
+    description text,
+    image_url text,
+    stock integer CHECK (stock IS NULL OR stock >= 0),
+    is_featured boolean NOT NULL DEFAULT false,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now()
 );
 
-create index products_category_id_idx on public.products(category_id);
+-- 2) Indexes
+CREATE INDEX products_category_id_idx
+    ON public.products (category_id);
 
-alter table public.categories enable row level security;
-alter table public.brands enable row level security;
-alter table public.products enable row level security;
+-- 3) Row Level Security
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.brands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
-grant select on public.categories, public.brands, public.products to anon, authenticated;
+-- 4) Permissions
+GRANT SELECT
+    ON public.categories, public.brands, public.products
+    TO anon, authenticated;
 
-create policy "Public can read active categories"
-  on public.categories for select to anon, authenticated
-  using (is_active);
+-- 5) Policies
+CREATE POLICY "Public can read active categories"
+    ON public.categories
+    FOR SELECT
+    TO anon, authenticated
+    USING (is_active);
 
-create policy "Public can read active brands"
-  on public.brands for select to anon, authenticated
-  using (is_active);
+CREATE POLICY "Public can read active brands"
+    ON public.brands
+    FOR SELECT
+    TO anon, authenticated
+    USING (is_active);
 
-create policy "Public can read active products"
-  on public.products for select to anon, authenticated
-  using (is_active);
+CREATE POLICY "Public can read active products"
+    ON public.products
+    FOR SELECT
+    TO anon, authenticated
+    USING (is_active);
 
-notify pgrst, 'reload schema';
+NOTIFY pgrst, 'reload schema';
