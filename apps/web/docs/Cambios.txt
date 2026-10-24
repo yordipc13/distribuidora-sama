@@ -1,0 +1,60 @@
+2026-10-22 - Caché opcional para traducciones del catálogo
+
+- El Worker ya no bloquea la traducción al inglés si falla la lectura o escritura de `product_translations`; devuelve el resultado de Gemini igualmente y usa la caché cuando está disponible.
+- La web conserva en `localStorage` el idioma elegido manualmente y lo restaura al recargar.
+
+2026-10-22 - Traducción de productos en Administración
+
+- El panel Admin reutiliza la tabla `product_translations` y el Worker de traducción que ya usa el catálogo público.
+- En inglés se muestran traducciones guardadas y se solicitan las faltantes solo al acercar filas a la vista; al elegir español se muestran los datos originales.
+- La selección inicial sigue la configuración de idioma del navegador y el selector permite cambiarla manualmente, sin modificar los productos originales.
+
+2026-10-19 - Primera interfaz pública
+
+- Se construyó la interfaz pública responsive en index.html, index.css e index.js.
+- Se incorporó el brandbook SAMA: verde #15803d, verde claro #22c55e, negro azulado #0f172a y blanco #f8fafc.
+- Se usaron Logo y Banner/banner.jpg y Logo y Banner/Logo.jpg como assets de la experiencia pública.
+- Se tomó wladhe.com únicamente como referencia funcional; la distribución, estilos y jerarquía visual son propios.
+- El catálogo actual utiliza datos demostrativos para validar la navegación. Queda pendiente conectar productos reales de Supabase.
+- Se implementaron búsqueda, filtro por categoría, detalle en modal, cantidades, favoritos, cotización persistente en localStorage y enlace de solicitud por WhatsApp.
+- El flujo Excel y la página Admin permanecen fuera de alcance hasta nueva autorización.
+- Las tarjetas dejaron de usar productos demostrativos: ahora se generan únicamente con los registros de la tabla `products` de Supabase.
+- `normalizeProduct` acepta los nombres documentados del Excel (`sku`, `producto`, `categoria`, `subcategoria`, `stock`, `detalle`, `descripcion`, `imagen`) y variantes comunes.
+- Los productos sin SKU, nombre o stock disponible se excluyen del catálogo; las imágenes faltantes o rotas usan el logo como respaldo.
+- La administración heredada se sustituyó por una vista SAMA de solo lectura para productos, categorías y marcas activas.
+- El panel usa la URL y clave publicable del proyecto Supabase SAMA; no incluye permisos de escritura ni lógica de envíos.
+- Se retiraron los scripts y migraciones de envíos ajenos al catálogo SAMA.
+- Se agregó `Admin/js/product-description.js`, que prepara productos antes de un futuro `insert/upsert`: conserva cualquier descripción manual y solo solicita descripciones para celdas vacías, con un retardo predeterminado de 3.5 segundos entre solicitudes.
+- Se agregó `cloudflare-worker/src/index.js` para consumir `gemini-3.5-flash-lite` sin exponer secretos al navegador. En Cloudflare Workers debe crearse el secret `GEMINI_API_KEY`; en `Admin/admin.html` solo debe configurarse la URL pública del Worker en `SAMA_DESCRIPTION_WORKER_URL`.
+- El módulo expone `window.SamaProductDescriptions.prepareProductsForSync(rows, { onProgress })`; su resultado es el que debe enviarse a Supabase al implementar la importación del Excel Maestro.
+- Se agregó al panel Admin el botón `Importar Excel`. Lee únicamente la primera hoja, reconoce las columnas `SKU`, `Producto`, `stock`, `Categoría`, `Subcategoría`, `Descripción` e `Imagen (url)`, conserva descripciones manuales y genera las vacías antes del `upsert` por SKU.
+- La importación usa la primera categoría cuando una celda contiene varias separadas por comas y lo informa al finalizar, porque `products.category_id` actualmente solo admite una categoría.
+- El esquema actual de Supabase conserva permisos de solo lectura; antes de importar registros reales debe habilitarse un mecanismo de escritura autenticado o una función protegida. El botón muestra el error de permisos explícitamente y no reporta una importación falsa.
+- La importación se adaptó a la tabla existente `products`, cuyos campos son `Sku`, `Producto`, `Categoria`, `Subcategoria`, `descripcion`, `Image(url)` y `stock`. `Categoria` se guarda directamente como texto desde Excel, sin consultar ni exigir registros en la tabla `categories`; las vistas públicas y Admin también leen esos campos.
+- Las categorías múltiples se conservan completas en `products.Categoria`. El catálogo público separa ese texto por comas al construir categorías, contar productos, mostrar subcategorías y filtrar; un producto puede aparecer en todas sus categorías sin duplicar el registro en Supabase.
+- Las categorías del catálogo público ya no dependen de una lista fija: se generan desde los valores de `products.Categoria`, incluyendo categorías nuevas y categorías múltiples. Cada categoría nueva obtiene su tarjeta, entrada del menú superior, sección del catálogo, contador, subcategorías y filtro automáticamente; el panel Admin también agrega vistas para categorías detectadas.
+- El panel Admin ahora requiere Supabase Auth con `app_metadata.role = 'admin'` antes de mostrar la tabla o permitir importaciones. Se agregó `supabase-admin-products.sql` con la política RLS de `products`; no se habilitó escritura anónima.
+- El importador acepta archivos `.xls`, `.xlsx`, `.xlsm`, `.xlsb` y nombres con doble extensión como `.xlsb.xlsm`; SheetJS se configura para leerlos como arreglo binario y conservar macros cuando el formato las incluya.
+- Las solicitudes de descripción reintentan automáticamente hasta 3 veces ante errores transitorios del Worker/Gemini (`429`, `5xx`, indisponibilidad o saturación), con espera progresiva de 3, 6 y 9 segundos.
+- La importación guarda cada producto inmediatamente después de preparar su descripción mediante un `upsert` individual por `Sku`; si un producto posterior falla, los productos anteriores permanecen guardados.
+- El panel Admin incluye un menú desplegable con una pestaña de Estadísticas. La importación continúa en segundo plano ante errores individuales, conserva el tiempo total, el temporizador del producto actual y una tabla con la duración y resultado de cada producto hasta iniciar una nueva importación.
+- La Administración permite seleccionar filas, filtrar globalmente o por múltiples encabezados, editar y agregar productos, y usar un menú contextual con edición y borrado. El menú rojo incluye borrado de seleccionados, de la categoría activa, de todas las descripciones o de todos los productos; todas las operaciones destructivas requieren confirmación y permisos de administrador.
+- La búsqueda del catálogo usa una sola barra superior: los encabezados únicamente seleccionan o deseleccionan las columnas donde se buscará. Si no se selecciona ningún encabezado, la búsqueda se realiza en todas las columnas; ya no se crean campos de texto dentro de la tabla.
+- El menú Borrar del panel Admin incluye una opción para limpiar todas las asociaciones `Image(url)` de los productos. Requiere confirmación y no elimina los archivos locales de la carpeta Galería.
+- Se creó `Galeria` en la raíz del proyecto para las descargas locales del buscador de imágenes. Sus archivos se excluyen de Git para no publicar imágenes locales accidentalmente; la carpeta se selecciona manualmente desde Administración.
+- Se sustituyó Google Custom Search por SerpApi para la búsqueda de imágenes, porque la API de Google no concedió acceso al proyecto. El Worker usa el secreto `SERPAPI_API_KEY` y conserva el mismo formato de resultados para no cambiar la interfaz Admin.
+- El buscador de imágenes pasó a un flujo sin API de búsqueda: abre Google Imágenes con el producto precargado, permite pegar una URL directa y usa el Worker únicamente para validar y descargar la imagen en `Galeria`. El navegador no puede detectar automáticamente el portapapeles de otra pestaña.
+- El asistente de imágenes permite eliminar las imágenes seleccionadas de la selección actual y agregar archivos locales mediante arrastrar y soltar. La licencia y autorización de las imágenes elegidas quedan bajo responsabilidad del administrador.
+- La acción principal del asistente ahora se llama `Siguiente`: descarga las imágenes seleccionadas, avanza al siguiente producto y reutiliza la misma ventana nombrada de Google Imágenes.
+- Se corrigió el arrastre desde Google para no duplicar una imagen: cuando el navegador entrega archivo y URL al mismo tiempo, se conserva únicamente el archivo local.
+- `Siguiente` solicita confirmación antes de descargar, cierra la ventana de búsqueda creada por Administración y abre la del siguiente producto con una posición inicial a la derecha. Chrome puede ignorar la posición solicitada por sus políticas de ventanas; no es posible controlar una pestaña abierta manualmente.
+- El asistente acepta imágenes distintas aunque el navegador les asigne el mismo nombre genérico (`images.jpg`). Al completar `Siguiente`, guarda la imagen primaria en `Galeria` y actualiza `products."Image(url)"` con su ruta relativa para que el catálogo deje de mostrar el producto como pendiente.
+- La selección de productos se muestra con fondo azul. El borrado por categoría abre un diálogo con todas las categorías encontradas en `Categoria`, incluyendo categorías múltiples separadas por comas, y solo se ejecuta después de seleccionar una categoría y pulsar Borrar.
+- La importación de Excel ya no genera descripciones automáticamente: guarda únicamente los datos del archivo. La generación de descripciones se ejecuta de forma explícita con el botón `Generar descripciones`, que procesa solo productos activos sin descripción.
+- El prompt de Gemini genera descripciones provisionales de una o dos líneas, limitadas a describir el producto y los datos explícitos de su nombre, sin lenguaje publicitario, frases de comercio electrónico ni especificaciones inventadas. Las descripciones manuales del Excel o del formulario Editar reemplazan las automáticas mediante `upsert`/`update`.
+- El prompt del Worker de Gemini se ajustó a descripciones factuales de 18 a 35 palabras, en una o dos oraciones, sin recomendaciones, beneficios ni frases publicitarias; se redujo `maxOutputTokens` y la temperatura para favorecer respuestas breves y consistentes.
+- Estadísticas ahora muestra la descripción generada para cada SKU y permite cancelar la generación; las solicitudes y esperas respetan `AbortController`, y las descripciones guardadas antes de cancelar se conservan.
+- El Worker añade `systemInstruction` y valida la salida contra lenguaje comercial; si Gemini ignora las reglas, usa una descripción factual de respaldo basada en el nombre del producto.
+- Se agregó `images-worker`, un Worker independiente para buscar candidatos mediante Google Programmable Search y descargar imágenes aprobadas para una galería local; sus credenciales deben configurarse como secretos y no se incluyen en el repositorio.
+- Administración incorpora la pestaña Imágenes: consulta productos activos sin imagen, permite buscar candidatos, seleccionar una o varias imágenes, descargarlas con el SKU y avanzar al siguiente producto. La migración posterior a R2 podrá conservar esos nombres y rutas.
+- Se agregó `supabase-product-images.sql` para la tabla de imágenes adicionales y sus políticas RLS. Debe ejecutarse antes de usar el guardado desde la pestaña Imágenes.

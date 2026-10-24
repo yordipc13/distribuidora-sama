@@ -1,0 +1,38 @@
+Distribuidora SAMA - estructura recomendada
+
+admin/
+  admin.html
+  css/
+  js/
+
+public/
+  index.html
+  css/
+  js/
+
+assets/
+  logo-y-banner/
+  galeria/
+
+sql/
+  supabase-schema.sql
+  supabase-admin-products.sql
+  supabase-product-images.sql
+  supabase-product-translations.sql
+  supabase-user-favorites.sql
+
+workers/
+  cloudflare-worker/
+  images-worker/
+
+docs/
+  instrucciones.txt
+  Cambios.txt
+
+Regla:
+- admin/ para todo lo del panel administrativo.
+- public/ para la tienda y la página pública.
+- docs/ para documentación e instrucciones.
+- sql/ para scripts de base de datos.
+- workers/ para Cloudflare Workers.
+- assets/ para logotipos, banners y galerías.
