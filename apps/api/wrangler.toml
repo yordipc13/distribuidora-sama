@@ -1,0 +1,20 @@
+name = "sama-description-api"
+main = "src/index.js"
+compatibility_date = "2026-10-20"
+
+[vars]
+SUPABASE_URL = "https://kwzrenncmarkbmuzgitv.supabase.co"
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
+
+[observability.issue_detection]
+enabled = false
